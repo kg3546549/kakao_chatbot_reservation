@@ -13,6 +13,11 @@ class TemplatesTab extends StatelessWidget {
         title: const Text('항목 및 응답 설정'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.list_alt),
+            tooltip: '전체조회 텍스트 설정',
+            onPressed: () => _showTotalTemplateDialog(context, context.read<BotProvider>()),
+          ),
+          IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => _showAddItemDialog(context, context.read<BotProvider>()),
           ),
@@ -88,6 +93,44 @@ class TemplatesTab extends StatelessWidget {
     );
   }
 
+  void _showTotalTemplateDialog(BuildContext context, BotProvider bot) {
+    final controller = TextEditingController(text: bot.totalTemplate);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('전체조회 메시지 설정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('전체조회(/전체조회) 시 전송될 문구입니다.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: '메시지 템플릿',
+                hintText: '{전체현황} 변수 사용 가능',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 10,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          TextButton(
+            onPressed: () async {
+              await bot.updateTotalTemplate(controller.text);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditItemDialog(BuildContext context, BotProvider bot, Item item) {
     final nameController = TextEditingController(text: item.name);
     final capController = TextEditingController(text: item.maxCapacity.toString());
@@ -109,7 +152,7 @@ class TemplatesTab extends StatelessWidget {
               TextField(
                 controller: templateController,
                 decoration: const InputDecoration(
-                  hintText: '{날짜}, {인원셋팅}, {명단} 변수 사용 가능',
+                  hintText: '{날짜}, {인원셋팅}, {현재인원}, {명단} 변수 사용 가능',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 12,
