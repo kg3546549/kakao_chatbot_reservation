@@ -26,18 +26,47 @@ class MyApp extends StatelessWidget {
       title: '카카오톡 예약봇',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1A237E), // Indigo 900
-          brightness: Brightness.light,
-        ),
         useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1A237E),
-          brightness: Brightness.dark,
+          seedColor: const Color(0xFF40916C),
+          primary: const Color(0xFF40916C),
+          secondary: const Color(0xFF2D6A4F),
+          surface: const Color(0xFFF8F9FA),
         ),
-        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF8F9FA),
+          foregroundColor: Color(0xFF1B4332),
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Color(0xFF1B4332),
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        cardTheme: CardTheme(
+          color: Colors.white,
+          elevation: 2,
+          shadowColor: Colors.black.withOpacity(0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF40916C),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            elevation: 0,
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFF40916C).withOpacity(0.1),
+          labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF40916C)),
+          ),
+        ),
       ),
       home: const HomeScreen(),
     );

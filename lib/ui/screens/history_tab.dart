@@ -18,7 +18,16 @@ class HistoryTab extends StatelessWidget {
         if (items.isEmpty) {
           return Scaffold(
             appBar: AppBar(title: const Text('예약 이력')),
-            body: const Center(child: Text('등록된 항목이 없습니다.')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 60, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  const Text('등록된 항목이 없습니다.', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
           );
         }
 
@@ -29,6 +38,11 @@ class HistoryTab extends StatelessWidget {
               title: const Text('예약 이력'),
               bottom: TabBar(
                 isScrollable: true,
+                indicatorColor: const Color(0xFF40916C),
+                indicatorWeight: 3,
+                labelColor: const Color(0xFF1B4332),
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                unselectedLabelColor: Colors.grey,
                 tabs: items.map((item) => Tab(text: item.name)).toList(),
               ),
             ),
@@ -58,30 +72,46 @@ class _HistoryListViewState extends State<HistoryListView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (_filterDate != null)
-                TextButton.icon(
-                  onPressed: () => setState(() => _filterDate = null),
-                  icon: const Icon(Icons.clear),
-                  label: const Text('필터 해제'),
-                ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _filterDate ?? DateTime.now(),
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime.now().add(const Duration(days: 30)),
-                  );
-                  if (date != null) {
-                    setState(() => _filterDate = date);
-                  }
-                },
-                icon: const Icon(Icons.calendar_month),
-                label: Text(_filterDate == null ? '날짜 선택' : DateFormat('yyyy-MM-dd').format(_filterDate!)),
+              const Text('예약 리스트', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B4332))),
+              Row(
+                children: [
+                  if (_filterDate != null)
+                    IconButton(
+                      onPressed: () => setState(() => _filterDate = null),
+                      icon: const Icon(Icons.refresh, size: 20, color: Colors.grey),
+                      tooltip: '필터 해제',
+                    ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _filterDate ?? DateTime.now(),
+                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        lastDate: DateTime.now().add(const Duration(days: 30)),
+                      );
+                      if (date != null) {
+                        setState(() => _filterDate = date);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF40916C),
+                      side: const BorderSide(color: Color(0xFF40916C), width: 1),
+                      minimumSize: const Size(100, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.calendar_month, size: 16),
+                    label: Text(
+                      _filterDate == null ? '날짜 선택' : DateFormat('MM/dd').format(_filterDate!),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -93,12 +123,23 @@ class _HistoryListViewState extends State<HistoryListView> {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               
               final reservations = snapshot.data!.reversed.toList();
-              if (reservations.isEmpty) return const Center(child: Text('해당 조건의 이력이 없습니다.'));
+              if (reservations.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40.0),
+                    child: Text(
+                      _filterDate == null ? '이력이 없습니다.' : '해당 날짜에 예약이 없습니다.',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                );
+              }
 
               final grouped = _groupReservationsByDate(reservations);
               final dates = grouped.keys.toList();
 
               return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 itemCount: dates.length,
                 itemBuilder: (context, index) {
                   final date = dates[index];
@@ -107,24 +148,52 @@ class _HistoryListViewState extends State<HistoryListView> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        color: Colors.grey.shade200,
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 12, top: 16),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(date, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                            Text('총 ${dailyRes.length}명', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text(date, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF40916C), fontSize: 15)),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF40916C).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text('${dailyRes.length}명', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF40916C))),
+                            ),
                           ],
                         ),
                       ),
-                      ...dailyRes.map((res) => ListTile(
-                        dense: true,
-                        title: Text(res.nickname, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(res.roomName),
-                        trailing: Text(DateFormat('HH:mm').format(res.createdAt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                      )),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          side: BorderSide(color: Colors.grey.shade100),
+                        ),
+                        child: Column(
+                          children: dailyRes.map((res) {
+                            final isLast = dailyRes.indexOf(res) == dailyRes.length - 1;
+                            return Column(
+                              children: [
+                                ListTile(
+                                  dense: true,
+                                  leading: const CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: Color(0xFFF8F9FA),
+                                    child: Icon(Icons.person, size: 16, color: Colors.grey),
+                                  ),
+                                  title: Text(res.nickname, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text(res.roomName, style: const TextStyle(fontSize: 11)),
+                                  trailing: Text(DateFormat('HH:mm').format(res.createdAt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ),
+                                if (!isLast) Divider(height: 1, indent: 56, color: Colors.grey.shade100),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ],
                   );
                 },

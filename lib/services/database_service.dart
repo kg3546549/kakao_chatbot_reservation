@@ -123,8 +123,14 @@ class DatabaseService {
     return await db.delete('reservations', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<int> clearReservations(int itemId) async {
+  Future<int> clearReservations(int itemId, {DateTime? date}) async {
     final db = await database;
+    if (date != null) {
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+      return await db.delete('reservations', 
+          where: 'item_id = ? AND created_at LIKE ?', 
+          whereArgs: [itemId, '$dateStr%']);
+    }
     return await db.delete('reservations', where: 'item_id = ?', whereArgs: [itemId]);
   }
 

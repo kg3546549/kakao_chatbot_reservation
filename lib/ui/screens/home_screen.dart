@@ -26,9 +26,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _tabs,
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Background Logo Watermark
+          Center(
+            child: Opacity(
+              opacity: 0.05,
+              child: Image.asset(
+                'assets/logo.png',
+                width: MediaQuery.of(context).size.width * 0.8,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          IndexedStack(
+            index: _selectedIndex,
+            children: _tabs,
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
