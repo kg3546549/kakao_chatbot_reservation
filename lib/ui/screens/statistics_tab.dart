@@ -14,14 +14,11 @@ class StatisticsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('예약 통계')),
-      body: FutureBuilder<List<Reservation>>(
-        future: DatabaseService().getReservations(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          
-          final history = snapshot.data!;
+      body: Consumer<BotProvider>(
+        builder: (context, bot, child) {
+          final history = bot.allReservations;
           final vips = _calculateVips(history);
-          final todayDist = _calculateTodayDistribution(history, context.read<BotProvider>().items);
+          final todayDist = _calculateTodayDistribution(history, bot.items);
           
           return ListView(
             padding: const EdgeInsets.all(20),

@@ -13,6 +13,7 @@ class BotProvider with ChangeNotifier {
 
   List<Item> _items = [];
   List<Room> _rooms = [];
+  List<Reservation> _allReservations = [];
   bool _isServiceEnabled = false;
   String _networkStatus = "연결됨";
   bool _isBatteryOptimized = false;
@@ -29,6 +30,7 @@ class BotProvider with ChangeNotifier {
 
   List<Item> get items => _items;
   List<Room> get rooms => _rooms;
+  List<Reservation> get allReservations => _allReservations;
   bool get isServiceEnabled => _isServiceEnabled;
   String get networkStatus => _networkStatus;
   bool get isBatteryOptimized => _isBatteryOptimized;
@@ -40,6 +42,7 @@ class BotProvider with ChangeNotifier {
 
   Future<void> _init() async {
     _items = await _db.getItems();
+    _allReservations = await _db.getReservations();
     final allRooms = await _db.getRooms();
     
     // Load custom commands
