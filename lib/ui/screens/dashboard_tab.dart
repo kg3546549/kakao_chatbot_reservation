@@ -14,7 +14,14 @@ class DashboardTab extends StatefulWidget {
 }
 
 class _DashboardTabState extends State<DashboardTab> {
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
+  DateTime? _lastBusinessDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = DateTime.now();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +37,14 @@ class _DashboardTabState extends State<DashboardTab> {
       ),
       body: Consumer<BotProvider>(
         builder: (context, bot, child) {
+          final businessDate = bot.businessDate;
+          if (_lastBusinessDate == null) {
+            _selectedDate = businessDate;
+          } else if (_isSameDay(_selectedDate, _lastBusinessDate!) &&
+              !_isSameDay(_lastBusinessDate!, businessDate)) {
+            _selectedDate = businessDate;
+          }
+          _lastBusinessDate = businessDate;
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             children: [
@@ -79,6 +94,10 @@ class _DashboardTabState extends State<DashboardTab> {
                           Text(
                             DateFormat('yyyy년 MM월 dd일 (E)', 'ko_KR').format(_selectedDate),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          Text(
+                            '카톡 기준일 전환: 매일 ${bot.resetTimeLabel}',
+                            style: const TextStyle(color: Colors.grey, fontSize: 11),
                           ),
                         ],
                       ),
@@ -175,6 +194,12 @@ class _DashboardTabState extends State<DashboardTab> {
         ) : null,
       ),
     );
+  }
+
+  bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
   }
 }
 
@@ -327,6 +352,29 @@ class ItemStatusCard extends StatelessWidget {
     );
   }
 
+  Future<DateTime> _manualReservationTimestamp(Item item) async {
+    final dayStart = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+
+    final reservations = await DatabaseService().getReservations(
+      itemId: item.id!,
+      date: selectedDate,
+    );
+    if (reservations.isEmpty) {
+      return dayStart;
+    }
+
+    final earliest = reservations.first.createdAt;
+    final candidate = earliest.subtract(const Duration(microseconds: 1));
+    if (candidate.isBefore(dayStart)) {
+      return dayStart;
+    }
+    return candidate;
+  }
+
   void _showResetConfirmDialog(BuildContext context, Item item) {
     showDialog(
       context: context,
@@ -374,11 +422,12 @@ class ItemStatusCard extends StatelessWidget {
           TextButton(
             onPressed: () async {
               if (nickController.text.isNotEmpty) {
+                final createdAt = await _manualReservationTimestamp(item);
                 await DatabaseService().insertReservation(Reservation(
                   itemId: item.id!,
                   nickname: nickController.text,
                   roomName: '수동 등록',
-                  createdAt: selectedDate, // Use the selected date for manual reservation
+                  createdAt: createdAt,
                 ));
                 if (context.mounted) {
                   context.read<BotProvider>().refresh();

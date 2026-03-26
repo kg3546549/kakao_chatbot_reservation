@@ -161,7 +161,7 @@ class StatisticsTab extends StatelessWidget {
     final now = DateTime.now();
     for (var res in history) {
       final diff = now.difference(res.createdAt).inDays;
-      if (diff < 7) {
+      if (diff >= 0 && diff < 7) {
         counts[6 - diff] = (counts[6 - diff] ?? 0) + 1;
       }
     }
@@ -212,7 +212,7 @@ class StatisticsTab extends StatelessWidget {
     final now = DateTime.now();
     for (var res in history) {
       final diff = now.difference(res.createdAt).inDays;
-      if (diff < 7) {
+      if (diff >= 0 && diff < 7) {
         counts[6 - diff] = (counts[6 - diff] ?? 0) + 1;
       }
     }

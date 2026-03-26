@@ -6,6 +6,16 @@ import '../../models/item.dart';
 class TemplatesTab extends StatelessWidget {
   const TemplatesTab({super.key});
 
+  void _showError(BuildContext context, Object error) {
+    final message = switch (error) {
+      ArgumentError _ => error.message?.toString() ?? '입력값을 확인해주세요.',
+      _ => '저장 중 오류가 발생했습니다.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -239,14 +249,18 @@ class TemplatesTab extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () async {
-              final updated = Item(
-                id: item.id,
-                name: nameController.text,
-                maxCapacity: int.tryParse(capController.text) ?? item.maxCapacity,
-                template: templateController.text,
-              );
-              await bot.updateItem(updated);
-              if (context.mounted) Navigator.pop(context);
+              try {
+                final updated = Item(
+                  id: item.id,
+                  name: nameController.text,
+                  maxCapacity: int.tryParse(capController.text) ?? item.maxCapacity,
+                  template: templateController.text,
+                );
+                await bot.updateItem(updated);
+                if (context.mounted) Navigator.pop(context);
+              } catch (error) {
+                if (context.mounted) _showError(context, error);
+              }
             },
             style: ElevatedButton.styleFrom(minimumSize: const Size(80, 40)),
             child: const Text('저장'),
@@ -285,8 +299,12 @@ class TemplatesTab extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
-                await bot.addItem(nameController.text, int.tryParse(capController.text) ?? 15);
-                if (context.mounted) Navigator.pop(context);
+                try {
+                  await bot.addItem(nameController.text, int.tryParse(capController.text) ?? 15);
+                  if (context.mounted) Navigator.pop(context);
+                } catch (error) {
+                  if (context.mounted) _showError(context, error);
+                }
               }
             },
             style: ElevatedButton.styleFrom(minimumSize: const Size(80, 40)),

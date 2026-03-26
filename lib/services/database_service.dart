@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
+  static const _databaseVersion = 2;
 
   factory DatabaseService() => _instance;
   DatabaseService._internal();
@@ -22,7 +23,10 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'kakao_bot.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: _databaseVersion,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE items(
@@ -58,6 +62,21 @@ class DatabaseService {
           )
         ''');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _cleanupOrphanReservations(db);
+        }
+      },
+      onOpen: (db) async {
+        await _cleanupOrphanReservations(db);
+      },
+    );
+  }
+
+  Future<void> _cleanupOrphanReservations(Database db) async {
+    await db.delete(
+      'reservations',
+      where: 'item_id NOT IN (SELECT id FROM items)',
     );
   }
 
@@ -65,7 +84,7 @@ class DatabaseService {
   Future<int> insertItem(Item item) async {
     final db = await database;
     return await db.insert('items', item.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+        conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   Future<List<Item>> getItems() async {
@@ -138,7 +157,7 @@ class DatabaseService {
   Future<int> insertRoom(Room room) async {
     final db = await database;
     return await db.insert('rooms', room.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+        conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   Future<List<Room>> getRooms() async {
@@ -151,6 +170,18 @@ class DatabaseService {
     final db = await database;
     return await db.update('rooms', room.toMap(),
         where: 'id = ?', whereArgs: [room.id]);
+  }
+
+  Future<Room?> getRoomByName(String name) async {
+    final db = await database;
+    final maps = await db.query(
+      'rooms',
+      where: 'name = ?',
+      whereArgs: [name],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Room.fromMap(maps.first);
   }
 
   // Logs

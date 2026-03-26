@@ -50,6 +50,19 @@ class SettingsTab extends StatelessWidget {
               _buildSectionTitle('시스템 및 진단'),
               const SizedBox(height: 8),
               _buildSystemCard(
+                icon: Icons.schedule_outlined,
+                title: '예약 기준일 전환 시간',
+                subtitle: '매일 ${bot.resetTimeLabel}에 카톡 예약 기준일이 바뀝니다.',
+                onTap: () => _showResetTimePicker(context, bot),
+                trailing: Text(
+                  bot.resetTimeLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF40916C),
+                  ),
+                ),
+              ),
+              _buildSystemCard(
                 icon: Icons.settings_suggest_outlined,
                 title: '명령어 단어 설정',
                 subtitle: '예약, 취소 등 명령어 단어 커스텀',
@@ -89,6 +102,20 @@ class SettingsTab extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Future<void> _showResetTimePicker(BuildContext context, BotProvider bot) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: bot.resetHour, minute: bot.resetMinute),
+    );
+    if (picked == null) return;
+    await bot.updateResetTime(picked);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('예약 기준일 전환 시간이 ${bot.resetTimeLabel}로 저장되었습니다.')),
+      );
+    }
   }
 
   Widget _buildSectionTitle(String title) {

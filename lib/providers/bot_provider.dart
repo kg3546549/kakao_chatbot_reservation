@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
+import 'package:sqflite/sqflite.dart';
 import '../models/item.dart';
 import '../models/reservation.dart';
 import '../models/room.dart';
@@ -10,6 +14,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class BotProvider with ChangeNotifier {
   final DatabaseService _db = DatabaseService();
   final MethodChannel _channel = const MethodChannel('com.geon.kakao_bot/notification');
+  Timer? _cutoffTimer;
+  DateTime? _lastBusinessDate;
 
   List<Item> _items = [];
   List<Room> _rooms = [];
@@ -27,6 +33,8 @@ class BotProvider with ChangeNotifier {
   String cmdTemplate = "텍스트변경";
   String cmdTotal = "전체조회";
   String totalTemplate = "📊 전체 예약 현황 📊\n{전체현황}";
+  int resetHour = 0;
+  int resetMinute = 0;
 
   List<Item> get items => _items;
   List<Room> get rooms => _rooms;
@@ -34,18 +42,32 @@ class BotProvider with ChangeNotifier {
   bool get isServiceEnabled => _isServiceEnabled;
   String get networkStatus => _networkStatus;
   bool get isBatteryOptimized => _isBatteryOptimized;
+  DateTime get businessDate => _businessDateFor(DateTime.now());
+  String get resetTimeLabel =>
+      '${resetHour.toString().padLeft(2, '0')}:${resetMinute.toString().padLeft(2, '0')}';
 
   BotProvider() {
     _channel.setMethodCallHandler(_handleMethodCall);
+    _startCutoffWatcher();
     _init();
   }
 
   Future<void> _init() async {
     _items = await _db.getItems();
     _allReservations = await _db.getReservations();
-    final allRooms = await _db.getRooms();
+    _rooms = _sortRooms(await _db.getRooms());
+    await _loadPreferences();
     
-    // Load custom commands
+    try {
+      _isServiceEnabled = await _channel.invokeMethod('checkPermission');
+      _isBatteryOptimized = await _channel.invokeMethod('checkBatteryOptimization');
+    } catch (e) {
+      debugPrint("Native call failed: $e");
+    }
+    notifyListeners();
+  }
+
+  Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     cmdReserve = prefs.getString('cmd_reserve') ?? "예약";
     cmdCancel = prefs.getString('cmd_cancel') ?? "예약취소";
@@ -54,24 +76,90 @@ class BotProvider with ChangeNotifier {
     cmdMax = prefs.getString('cmd_max') ?? "세팅최대";
     cmdTemplate = prefs.getString('cmd_template') ?? "텍스트변경";
     cmdTotal = prefs.getString('cmd_total') ?? "전체조회";
-
-    // Sort: Reservation/Admin first, then General
-    allRooms.sort((a, b) {
-      if (a.type == b.type) return a.name.compareTo(b.name);
-      return a.type.index.compareTo(b.type.index); 
-    });
-    _rooms = allRooms;
-    
-    try {
-      _isServiceEnabled = await _channel.invokeMethod('checkPermission');
-      _isBatteryOptimized = await _channel.invokeMethod('checkBatteryOptimization');
-    } catch (e) {
-      debugPrint("Native call failed: $e");
-    }
-    
     totalTemplate = prefs.getString('total_template') ?? "📊 전체 예약 현황 📊\n{전체현황}";
-    
-    notifyListeners();
+    resetHour = prefs.getInt('reset_hour') ?? 0;
+    resetMinute = prefs.getInt('reset_minute') ?? 0;
+  }
+
+  List<Room> _sortRooms(List<Room> rooms) {
+    rooms.sort((a, b) {
+      if (a.type == b.type) return a.name.compareTo(b.name);
+      return a.type.index.compareTo(b.type.index);
+    });
+    return rooms;
+  }
+
+  DateTime _businessDateFor(DateTime dateTime) {
+    final cutoffMinutes = (resetHour * 60) + resetMinute;
+    final currentMinutes = (dateTime.hour * 60) + dateTime.minute;
+    final baseDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    if (currentMinutes < cutoffMinutes) {
+      return baseDate.subtract(const Duration(days: 1));
+    }
+    return baseDate;
+  }
+
+  DateTime _today() {
+    return _businessDateFor(DateTime.now());
+  }
+
+  bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  String _normalizeItemName(String name) => name.trim();
+
+  void _validateItemInput({
+    required String name,
+    required int maxCapacity,
+    int? currentItemId,
+  }) {
+    final normalized = _normalizeItemName(name);
+    if (normalized.isEmpty) {
+      throw ArgumentError('항목명은 비어 있을 수 없습니다.');
+    }
+    if (maxCapacity <= 0) {
+      throw ArgumentError('최대 정원은 1명 이상이어야 합니다.');
+    }
+
+    final isDuplicate = _items.any(
+      (item) => item.id != currentItemId && item.name == normalized,
+    );
+    if (isDuplicate) {
+      throw ArgumentError('이미 존재하는 항목명입니다.');
+    }
+  }
+
+  void _upsertItemInCache(Item item) {
+    final index = _items.indexWhere((existing) => existing.id == item.id);
+    if (index == -1) {
+      _items = [..._items, item];
+      return;
+    }
+
+    final updatedItems = [..._items];
+    updatedItems[index] = item;
+    _items = updatedItems;
+  }
+
+  void _removeItemFromCache(int id) {
+    _items = _items.where((item) => item.id != id).toList();
+    _allReservations = _allReservations.where((reservation) => reservation.itemId != id).toList();
+  }
+
+  void _startCutoffWatcher() {
+    _lastBusinessDate = businessDate;
+    _cutoffTimer?.cancel();
+    _cutoffTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final currentBusinessDate = businessDate;
+      if (_lastBusinessDate == null || !_isSameDay(_lastBusinessDate!, currentBusinessDate)) {
+        _lastBusinessDate = currentBusinessDate;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> updateTotalTemplate(String template) async {
@@ -144,8 +232,15 @@ class BotProvider with ChangeNotifier {
       room = _rooms.firstWhere((r) => r.name == roomName);
     } catch (e) {
       final newRoom = Room(name: roomName, type: RoomType.general);
-      await _db.insertRoom(newRoom);
-      _rooms = await _db.getRooms();
+      try {
+        final roomId = await _db.insertRoom(newRoom);
+        _rooms = _sortRooms([..._rooms, Room(id: roomId, name: roomName, type: RoomType.general)]);
+      } on DatabaseException {
+        final existingRoom = await _db.getRoomByName(roomName);
+        if (existingRoom != null) {
+          _rooms = _sortRooms([..._rooms.where((r) => r.name != roomName), existingRoom]);
+        }
+      }
       notifyListeners();
       return;
     }
@@ -153,14 +248,15 @@ class BotProvider with ChangeNotifier {
     if (room.type == RoomType.general) return;
 
     // 2. Command check
-    if (!message.startsWith('/')) return;
+    final trimmedMessage = message.trim();
+    if (!trimmedMessage.startsWith('/')) return;
 
-    if (message.startsWith('/$cmdTotal')) {
-      await _sendTotalStatus(roomName);
+    if (trimmedMessage == '/$cmdTotal') {
+      await _sendTotalStatus(roomName, date: _today());
       return;
     }
 
-    final parts = message.split(' ');
+    final parts = trimmedMessage.split(RegExp(r'\s+'));
     if (parts.length < 2) return;
 
     final commandWithPrefix = parts[0];
@@ -179,30 +275,49 @@ class BotProvider with ChangeNotifier {
       if (parts.length < 3) return;
       final rawNicks = parts.sublist(2).join(' ');
       final nicknames = rawNicks.split(RegExp(r'[,|]')).map((s) => s.trim()).where((s) => s.isNotEmpty);
+      final newReservations = <Reservation>[];
       for (var nick in nicknames) {
-        await _db.insertReservation(Reservation(
-            itemId: item.id!, nickname: nick, roomName: roomName));
+        final reservation = Reservation(itemId: item.id!, nickname: nick, roomName: roomName);
+        final reservationId = await _db.insertReservation(reservation);
+        newReservations.add(Reservation(
+          id: reservationId,
+          itemId: reservation.itemId,
+          nickname: reservation.nickname,
+          roomName: reservation.roomName,
+          createdAt: reservation.createdAt,
+        ));
       }
-      await _sendReply(roomName, await _formatStatus(item));
+      _allReservations = [..._allReservations, ...newReservations];
+      await _sendReply(roomName, await _formatStatus(item, date: _today()));
+      notifyListeners();
     } else if (commandText == cmdCancel) {
       if (parts.length < 3) return;
       final rawNicks = parts.sublist(2).join(' ');
       final nicknames = rawNicks.split(RegExp(r'[,|]')).map((s) => s.trim()).where((s) => s.isNotEmpty);
-      final currentReservations = await _db.getReservations(itemId: item.id!);
+      final targetDate = _today();
+      final currentReservations = await _db.getReservations(itemId: item.id!, date: targetDate);
       for (var nick in nicknames) {
         try {
           final res = currentReservations.firstWhere((r) => r.nickname == nick);
           await _db.deleteReservation(res.id!);
-        } catch (e) {}
+          _allReservations = _allReservations.where((reservation) => reservation.id != res.id).toList();
+        } catch (_) {}
       }
-      await _sendReply(roomName, await _formatStatus(item));
+      await _sendReply(roomName, await _formatStatus(item, date: targetDate));
+      notifyListeners();
     } else if (commandText == cmdStatus) {
-      await _sendReply(roomName, await _formatStatus(item));
+      await _sendReply(roomName, await _formatStatus(item, date: _today()));
     } else if (commandText == cmdReset) {
       if (room.type != RoomType.admin) return;
-      await _db.clearReservations(item.id!);
+      final targetDate = _today();
+      final itemId = item.id!;
+      await _db.clearReservations(item.id!, date: targetDate);
+      _allReservations = _allReservations.where((reservation) {
+        return reservation.itemId != itemId || !_isSameDay(reservation.createdAt, targetDate);
+      }).toList();
       await _sendReply(roomName, "✅ ${item.name} 항목의 예약이 초기화되었습니다.");
-      await _sendReply(roomName, await _formatStatus(item));
+      await _sendReply(roomName, await _formatStatus(item, date: targetDate));
+      notifyListeners();
     } else if (commandText == cmdMax) {
       if (room.type != RoomType.admin) return;
       if (parts.length < 3) return;
@@ -214,9 +329,9 @@ class BotProvider with ChangeNotifier {
             maxCapacity: max,
             template: item.template);
         await _db.updateItem(updatedItem);
-        _items = await _db.getItems();
+        _upsertItemInCache(updatedItem);
         await _sendReply(roomName, "✅ ${item.name} 최대 인원이 $max명으로 변경되었습니다.");
-        await _sendReply(roomName, await _formatStatus(item));
+        await _sendReply(roomName, await _formatStatus(updatedItem, date: _today()));
         notifyListeners();
       }
     } else if (commandText == cmdTemplate) {
@@ -238,21 +353,32 @@ class BotProvider with ChangeNotifier {
           maxCapacity: item.maxCapacity,
           template: newTemplate);
       await _db.updateItem(updatedItem);
-      _items = await _db.getItems();
+      _upsertItemInCache(updatedItem);
       
       await _sendReply(roomName, "✅ ${item.name} 항목의 공지 텍스트가 변경되었습니다.");
       notifyListeners();
     }
   }
 
-  Future<String> _formatStatus(Item item) async {
-    final reservations = await _db.getReservations(itemId: item.id!);
+  Future<void> updateResetTime(TimeOfDay time) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reset_hour', time.hour);
+    await prefs.setInt('reset_minute', time.minute);
+    resetHour = time.hour;
+    resetMinute = time.minute;
+    _lastBusinessDate = businessDate;
+    notifyListeners();
+  }
+
+  Future<String> _formatStatus(Item item, {DateTime? date}) async {
+    final targetDate = date ?? _today();
+    final reservations = await _db.getReservations(itemId: item.id!, date: targetDate);
     String template = item.template;
     if (template.isEmpty) {
       template = "🎊 {날짜} ${item.name} 예약창🎊\n엔트리 : {인원셋팅} MAX\n❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒\n{명단}";
     }
 
-    final dateStr = DateFormat('yyyy년 MM월 dd일').format(DateTime.now());
+    final dateStr = DateFormat('yyyy년 MM월 dd일').format(targetDate);
     final entryStr = "${reservations.length}/${item.maxCapacity}";
 
     String listStr = "";
@@ -279,10 +405,11 @@ class BotProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _sendTotalStatus(String roomName) async {
+  Future<void> _sendTotalStatus(String roomName, {DateTime? date}) async {
+    final targetDate = date ?? _today();
     String listStr = "";
     for (var item in _items) {
-      final res = await _db.getReservations(itemId: item.id!);
+      final res = await _db.getReservations(itemId: item.id!, date: targetDate);
       listStr += "- ${item.name}: ${res.length}/${item.maxCapacity}\n";
     }
     
@@ -293,30 +420,53 @@ class BotProvider with ChangeNotifier {
   Future<void> updateRoomType(Room room, RoomType type) async {
     final updated = Room(id: room.id, name: room.name, type: type);
     await _db.updateRoom(updated);
-    _rooms = await _db.getRooms();
-    await _init(); // Re-sort and notify
+    _rooms = _sortRooms([
+      for (final currentRoom in _rooms)
+        if (currentRoom.id == room.id) updated else currentRoom,
+    ]);
+    notifyListeners();
   }
 
   Future<void> addItem(String name, int max) async {
-    await _db.insertItem(Item(name: name, maxCapacity: max));
-    _items = await _db.getItems();
+    final normalized = _normalizeItemName(name);
+    _validateItemInput(name: normalized, maxCapacity: max);
+    final itemId = await _db.insertItem(Item(name: normalized, maxCapacity: max));
+    _items = [..._items, Item(id: itemId, name: normalized, maxCapacity: max)];
     notifyListeners();
   }
 
   Future<void> updateItem(Item item) async {
-    await _db.updateItem(item);
-    _items = await _db.getItems();
+    final normalized = _normalizeItemName(item.name);
+    _validateItemInput(
+      name: normalized,
+      maxCapacity: item.maxCapacity,
+      currentItemId: item.id,
+    );
+    final updatedItem = Item(
+      id: item.id,
+      name: normalized,
+      maxCapacity: item.maxCapacity,
+      template: item.template,
+    );
+    await _db.updateItem(updatedItem);
+    _upsertItemInCache(updatedItem);
     notifyListeners();
   }
 
   Future<void> deleteItem(int id) async {
     await _db.deleteItem(id);
-    _items = await _db.getItems();
+    _removeItemFromCache(id);
     notifyListeners();
   }
 
   void setNetworkStatus(String status) {
     _networkStatus = status;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _cutoffTimer?.cancel();
+    super.dispose();
   }
 }
