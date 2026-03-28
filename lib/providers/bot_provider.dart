@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
@@ -61,8 +62,13 @@ class BotProvider with ChangeNotifier {
     try {
       _isServiceEnabled = await _channel.invokeMethod('checkPermission');
       _isBatteryOptimized = await _channel.invokeMethod('checkBatteryOptimization');
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint("Native call failed: $e");
+      FirebaseCrashlytics.instance.recordError(
+        e, stack,
+        reason: 'Native 초기화 실패',
+        fatal: false,
+      );
     }
     notifyListeners();
   }
@@ -400,8 +406,13 @@ class BotProvider with ChangeNotifier {
         'message': message,
       });
       await _db.addLog("성공", "답장 전송 ($roomName)");
-    } catch (e) {
+    } catch (e, stack) {
       await _db.addLog("오류", "답장 실패 ($roomName): $e");
+      FirebaseCrashlytics.instance.recordError(
+        e, stack,
+        reason: 'sendReply 실패: $roomName',
+        fatal: false,
+      );
     }
   }
 

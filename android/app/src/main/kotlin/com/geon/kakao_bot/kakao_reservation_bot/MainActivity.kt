@@ -1,62 +1,28 @@
 package com.geon.kakao_bot.kakao_reservation_bot
 
-import android.app.Notification
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
-import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
-import io.flutter.plugin.common.MethodChannel
+import java.lang.ref.WeakReference
 
-class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.geon.kakao_bot/notification"
+class MainActivity : FlutterActivity() {
 
-    override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
+    // App.kt가 만들어 놓은 캐시 엔진을 재사용 — MainActivity가 죽어도 엔진은 살아있음
+    override fun getCachedEngineId(): String = App.ENGINE_ID
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
-        FlutterEngineCache.getInstance().put("my_engine_id", flutterEngine)
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "checkPermission" -> {
-                    result.success(isNotificationServiceEnabled())
-                }
-                "requestPermission" -> {
-                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    result.success(null)
-                }
-                "checkBatteryOptimization" -> {
-                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                    result.success(pm.isIgnoringBatteryOptimizations(packageName))
-                }
-                "requestBatteryOptimization" -> {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    intent.data = Uri.parse("package:$packageName")
-                    startActivity(intent)
-                    result.success(null)
-                }
-                "sendReply" -> {
-                    val roomName = call.argument<String>("roomName")
-                    val message = call.argument<String>("message")
-                    if (roomName != null && message != null) {
-                        val success = NotificationService.instance?.sendReply(roomName, message) ?: false
-                        if (success) result.success(true) else result.error("REPLY_FAILED", "Could not find reply action for room", null)
-                    } else {
-                        result.error("INVALID_ARGUMENT", "Room name or message is null", null)
-                    }
-                }
-                else -> result.notImplemented()
-            }
-        }
+        // Activity가 열린 동안 currentActivity 참조를 유지해 requestPermission 등이 동작하게 함
+        (application as App).currentActivity = WeakReference(this)
     }
 
-    private fun isNotificationServiceEnabled(): Boolean {
-        val cn = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        return cn != null && cn.contains(packageName)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        (application as App).currentActivity = WeakReference(this)
+    }
+
+    override fun onDestroy() {
+        (application as App).currentActivity = null
+        super.onDestroy()
     }
 }
