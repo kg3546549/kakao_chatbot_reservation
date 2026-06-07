@@ -14,8 +14,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
     }
 
+    function isTenantActive(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == "active";
+    }
+
     function isTenantMember(tenantId) {
       return signedIn()
+        && isTenantActive(tenantId)
         && exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid))
         && membership(tenantId).data.status == "active";
     }
@@ -72,6 +77,13 @@ service cloud.firestore {
 
       match /dailyStats/{date} {
         allow read: if isTenantMember(tenantId);
+        allow write: if false;
+      }
+
+      match /auditLogs/{logId} {
+        allow read: if isPlatformAdmin()
+          || (isTenantMember(tenantId)
+            && membership(tenantId).data.role == "owner");
         allow write: if false;
       }
     }

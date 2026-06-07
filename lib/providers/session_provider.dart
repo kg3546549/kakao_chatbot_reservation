@@ -78,10 +78,17 @@ class SessionProvider with ChangeNotifier {
         .collection('tenantMemberships')
         .where('status', isEqualTo: 'active')
         .snapshots()
-        .listen((snapshot) {
-      tenants = snapshot.docs
-          .map((doc) => TenantMembership.fromMap(doc.data()))
-          .toList();
+        .listen((snapshot) async {
+      final activeTenants = <TenantMembership>[];
+      for (final membership in snapshot.docs) {
+        final tenantId = membership.data()['tenantId'] ?? membership.id;
+        final tenant =
+            await _firestore.collection('tenants').doc(tenantId).get();
+        if (tenant.data()?['status'] == 'active') {
+          activeTenants.add(TenantMembership.fromMap(membership.data()));
+        }
+      }
+      tenants = activeTenants;
       initializing = false;
       notifyListeners();
     }, onError: (Object error) {

@@ -20,6 +20,10 @@ function requirePlatformAdmin(request: { auth?: { token?: Record<string, unknown
 }
 
 async function requireMembership(uid: string, tenantId: string, roles?: Role[]) {
+  const tenant = await db.doc(`tenants/${tenantId}`).get();
+  if (!tenant.exists || tenant.get("status") !== "active") {
+    throw new HttpsError("failed-precondition", "현재 이용할 수 없는 가게입니다.");
+  }
   const member = await db.doc(`tenants/${tenantId}/members/${uid}`).get();
   if (!member.exists || member.get("status") !== "active") {
     throw new HttpsError("permission-denied", "활성화된 가게 멤버가 아닙니다.");
@@ -73,11 +77,18 @@ export const updateTenantStatus = onCall({ region }, async (request) => {
   if (!tenantId || !["active", "suspended"].includes(status)) {
     throw new HttpsError("invalid-argument", "유효한 tenantId와 status가 필요합니다.");
   }
-  await db.doc(`tenants/${tenantId}`).set({
+  const tenantRef = db.doc(`tenants/${tenantId}`);
+  await tenantRef.set({
     status,
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: request.auth?.uid,
   }, { merge: true });
+  await tenantRef.collection("auditLogs").add({
+    action: "tenant_status_changed",
+    status,
+    actorUid: request.auth?.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
   return { success: true };
 });
 
