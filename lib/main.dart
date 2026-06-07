@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/bot_provider.dart';
 import 'providers/session_provider.dart';
+import 'services/push_notification_service.dart';
 import 'ui/screens/auth_gate.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -20,6 +21,7 @@ void main() async {
 
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  await PushNotificationService.instance.initialize();
 
   // Flutter 프레임워크 오류 → Crashlytics
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
