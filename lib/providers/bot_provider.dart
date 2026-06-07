@@ -480,7 +480,9 @@ class BotProvider with ChangeNotifier {
     _validateItemInput(name: normalized, maxCapacity: max);
     final itemId =
         await _db.insertItem(Item(name: normalized, maxCapacity: max));
-    _items = [..._items, Item(id: itemId, name: normalized, maxCapacity: max)];
+    final item = Item(id: itemId, name: normalized, maxCapacity: max);
+    _items = [..._items, item];
+    await CloudSyncService.instance.publishItem(item);
     notifyListeners();
   }
 
@@ -498,12 +500,14 @@ class BotProvider with ChangeNotifier {
       template: item.template,
     );
     await _db.updateItem(updatedItem);
+    await CloudSyncService.instance.publishItem(updatedItem);
     _upsertItemInCache(updatedItem);
     notifyListeners();
   }
 
   Future<void> deleteItem(int id) async {
     await _db.deleteItem(id);
+    await CloudSyncService.instance.deleteItem(id);
     _removeItemFromCache(id);
     notifyListeners();
   }

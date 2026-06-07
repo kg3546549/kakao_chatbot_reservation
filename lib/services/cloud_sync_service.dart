@@ -34,6 +34,7 @@ class CloudSyncService {
       const Duration(minutes: 1),
       (_) => flushPendingEvents(),
     );
+    unawaited(_publishExistingItems());
     unawaited(flushPendingEvents());
   }
 
@@ -81,6 +82,52 @@ class CloudSyncService {
       itemName: item.name,
       businessDate: DateFormat('yyyy-MM-dd').format(date),
     );
+  }
+
+  Future<void> publishItem(Item item) async {
+    final tenantId = _tenantId;
+    if (tenantId == null || item.id == null) return;
+    try {
+      await _functions.httpsCallable('upsertItem').call({
+        'tenantId': tenantId,
+        'itemId': item.id.toString(),
+        'name': item.name,
+        'maxCapacity': item.maxCapacity,
+        'template': item.template,
+      });
+    } catch (error, stack) {
+      await FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        reason: 'item cloud sync failed',
+        fatal: false,
+      );
+    }
+  }
+
+  Future<void> deleteItem(int itemId) async {
+    final tenantId = _tenantId;
+    if (tenantId == null) return;
+    try {
+      await _functions.httpsCallable('deleteItem').call({
+        'tenantId': tenantId,
+        'itemId': itemId.toString(),
+      });
+    } catch (error, stack) {
+      await FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        reason: 'item cloud delete failed',
+        fatal: false,
+      );
+    }
+  }
+
+  Future<void> _publishExistingItems() async {
+    final items = await _database.getItems();
+    for (final item in items) {
+      await publishItem(item);
+    }
   }
 
   Future<void> _publish({

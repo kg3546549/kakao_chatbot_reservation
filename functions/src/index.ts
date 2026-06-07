@@ -254,6 +254,42 @@ export const removeTenantMember = onCall({ region }, async (request) => {
   return { success: true };
 });
 
+export const upsertItem = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const itemId = String(request.data?.itemId ?? "");
+  const name = String(request.data?.name ?? "").trim();
+  const maxCapacity = Number(request.data?.maxCapacity ?? 0);
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !itemId || !name || !Number.isInteger(maxCapacity) || maxCapacity <= 0) {
+    throw new HttpsError("invalid-argument", "유효한 예약 항목 정보가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+
+  await db.doc(`tenants/${tenantId}/items/${itemId}`).set({
+    itemId,
+    name,
+    maxCapacity,
+    template: String(request.data?.template ?? ""),
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  }, { merge: true });
+  return { success: true };
+});
+
+export const deleteItem = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const itemId = String(request.data?.itemId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !itemId) {
+    throw new HttpsError("invalid-argument", "tenantId와 itemId가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  await db.doc(`tenants/${tenantId}/items/${itemId}`).delete();
+  return { success: true };
+});
+
 export const createReservationEvent = onCall({ region }, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
