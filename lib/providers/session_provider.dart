@@ -26,6 +26,8 @@ class SessionProvider with ChangeNotifier {
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _tenantSubscription;
   StreamSubscription<String>? _tokenSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _deviceSubscription;
 
   User? user;
   List<TenantMembership> tenants = [];
@@ -52,6 +54,7 @@ class SessionProvider with ChangeNotifier {
     platformAdmin = false;
     tenants = [];
     await _tenantSubscription?.cancel();
+    await _deviceSubscription?.cancel();
 
     if (nextUser == null) {
       initializing = false;
@@ -162,17 +165,10 @@ class SessionProvider with ChangeNotifier {
     if (tenant == null) return;
 
     await _run(() async {
-      mode = nextMode;
-      await _setNativeBotMode(nextMode == AppMode.bot);
-
       final prefs = await SharedPreferences.getInstance();
       var deviceId = prefs.getString('device_id');
       deviceId ??= '${user!.uid}-${DateTime.now().microsecondsSinceEpoch}';
       await prefs.setString('device_id', deviceId);
-      CloudSyncService.instance.configure(
-        tenantId: tenant.tenantId,
-        deviceId: deviceId,
-      );
 
       String token = '';
       if (nextMode == AppMode.admin) {
@@ -180,10 +176,25 @@ class SessionProvider with ChangeNotifier {
         token = await _messaging.getToken() ?? '';
       }
 
-      await _registerCurrentDevice(
+      mode = nextMode;
+      try {
+        await _registerCurrentDevice(
+          deviceId: deviceId,
+          token: token,
+        );
+      } catch (_) {
+        mode = null;
+        await _setNativeBotMode(false);
+        rethrow;
+      }
+      CloudSyncService.instance.configure(
+        tenantId: tenant.tenantId,
         deviceId: deviceId,
-        token: token,
       );
+      await _setNativeBotMode(nextMode == AppMode.bot);
+      if (nextMode == AppMode.bot) {
+        _watchBotDevice(tenant.tenantId, deviceId);
+      }
       await prefs.setString('selected_mode', nextMode.name);
     });
   }
@@ -191,6 +202,8 @@ class SessionProvider with ChangeNotifier {
   Future<void> leaveMode() async {
     await _deactivateCurrentDevice();
     await _setNativeBotMode(false);
+    await _deviceSubscription?.cancel();
+    _deviceSubscription = null;
     mode = null;
     CloudSyncService.instance.clear();
     final prefs = await SharedPreferences.getInstance();
@@ -281,6 +294,17 @@ class SessionProvider with ChangeNotifier {
     });
   }
 
+  Future<void> releaseBotDevice(String deviceId) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return;
+    await _run(() async {
+      await _functions.httpsCallable('releaseBotDevice').call({
+        'tenantId': tenant.tenantId,
+        'deviceId': deviceId,
+      });
+    });
+  }
+
   Future<void> bootstrapPlatformAdmin() async {
     await _run(() async {
       await _functions.httpsCallable('bootstrapPlatformAdmin').call();
@@ -336,13 +360,48 @@ class SessionProvider with ChangeNotifier {
     mode = restoredMode;
     final deviceId = prefs.getString('device_id');
     if (deviceId != null) {
+      try {
+        await _registerCurrentDevice(deviceId: deviceId);
+      } catch (_) {
+        mode = null;
+        selectedTenant = null;
+        await _clearSavedSession();
+        await _setNativeBotMode(false);
+        return;
+      }
       CloudSyncService.instance.configure(
         tenantId: tenant.tenantId,
         deviceId: deviceId,
       );
       await _setNativeBotMode(restoredMode == AppMode.bot);
-      await _registerCurrentDevice(deviceId: deviceId);
+      if (restoredMode == AppMode.bot) {
+        _watchBotDevice(tenant.tenantId, deviceId);
+      }
     }
+  }
+
+  void _watchBotDevice(String tenantId, String deviceId) {
+    _deviceSubscription?.cancel();
+    _deviceSubscription = _firestore
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('devices')
+        .doc(deviceId)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!snapshot.exists || snapshot.data()?['status'] != 'active') {
+        await _disableBotModeLocally();
+      }
+    }, onError: (_) => _disableBotModeLocally());
+  }
+
+  Future<void> _disableBotModeLocally() async {
+    await _setNativeBotMode(false);
+    mode = null;
+    CloudSyncService.instance.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('selected_mode');
+    notifyListeners();
   }
 
   Future<void> _clearSavedSession() async {
@@ -414,6 +473,7 @@ class SessionProvider with ChangeNotifier {
     _authSubscription?.cancel();
     _tenantSubscription?.cancel();
     _tokenSubscription?.cancel();
+    _deviceSubscription?.cancel();
     super.dispose();
   }
 }

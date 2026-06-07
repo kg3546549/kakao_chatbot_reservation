@@ -147,13 +147,31 @@ export const registerDevice = onCall({ region }, async (request) => {
     mode === "bot" ? ["owner", "manager", "botDevice"] : undefined,
   );
 
-  await db.doc(`tenants/${tenantId}/devices/${deviceId}`).set({
-    uid,
-    mode,
-    fcmToken,
-    status: "active",
-    lastSeenAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const tenantRef = db.doc(`tenants/${tenantId}`);
+  const deviceRef = tenantRef.collection("devices").doc(deviceId);
+  await db.runTransaction(async (transaction) => {
+    if (mode === "bot") {
+      const tenant = await transaction.get(tenantRef);
+      const activeBotDeviceId = String(tenant.get("activeBotDeviceId") ?? "");
+      if (activeBotDeviceId && activeBotDeviceId !== deviceId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "다른 기기가 이미 예약봇으로 실행 중입니다.",
+        );
+      }
+      transaction.set(tenantRef, {
+        activeBotDeviceId: deviceId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    transaction.set(deviceRef, {
+      uid,
+      mode,
+      fcmToken,
+      status: "active",
+      lastSeenAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   return { success: true };
 });
 
@@ -172,11 +190,51 @@ export const unregisterDevice = onCall({ region }, async (request) => {
   if (device.exists && device.get("uid") !== uid) {
     throw new HttpsError("permission-denied", "다른 사용자의 기기입니다.");
   }
-  await deviceRef.set({
-    status: "inactive",
-    fcmToken: "",
-    lastSeenAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const tenantRef = db.doc(`tenants/${tenantId}`);
+  await db.runTransaction(async (transaction) => {
+    const tenant = await transaction.get(tenantRef);
+    if (tenant.get("activeBotDeviceId") === deviceId) {
+      transaction.set(tenantRef, {
+        activeBotDeviceId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    transaction.set(deviceRef, {
+      status: "inactive",
+      fcmToken: "",
+      lastSeenAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  return { success: true };
+});
+
+export const releaseBotDevice = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const deviceId = String(request.data?.deviceId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !deviceId) {
+    throw new HttpsError("invalid-argument", "tenantId와 deviceId가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner", "manager"]);
+
+  const tenantRef = db.doc(`tenants/${tenantId}`);
+  const deviceRef = tenantRef.collection("devices").doc(deviceId);
+  await db.runTransaction(async (transaction) => {
+    const tenant = await transaction.get(tenantRef);
+    if (tenant.get("activeBotDeviceId") === deviceId) {
+      transaction.set(tenantRef, {
+        activeBotDeviceId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    transaction.set(deviceRef, {
+      status: "inactive",
+      fcmToken: "",
+      releasedBy: uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   return { success: true };
 });
 
@@ -304,6 +362,21 @@ export const createReservationEvent = onCall({ region }, async (request) => {
     throw new HttpsError("invalid-argument", "필수 예약 식별자가 없습니다.");
   }
   await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  const sourceDeviceId = String(request.data?.sourceDeviceId ?? "");
+  if (sourceDeviceId !== "admin") {
+    const tenant = await db.doc(`tenants/${tenantId}`).get();
+    const device = await db.doc(`tenants/${tenantId}/devices/${sourceDeviceId}`).get();
+    if (
+      !sourceDeviceId
+      || tenant.get("activeBotDeviceId") !== sourceDeviceId
+      || !device.exists
+      || device.get("status") !== "active"
+      || device.get("mode") !== "bot"
+      || device.get("uid") !== uid
+    ) {
+      throw new HttpsError("permission-denied", "활성 예약봇 기기가 아닙니다.");
+    }
+  }
 
   const eventRef = db.doc(`tenants/${tenantId}/reservationEvents/${eventId}`);
   const reservationRef = db.doc(
@@ -320,7 +393,7 @@ export const createReservationEvent = onCall({ region }, async (request) => {
       nickname: String(request.data?.nickname ?? ""),
       roomName: String(request.data?.roomName ?? ""),
       businessDate,
-      sourceDeviceId: String(request.data?.sourceDeviceId ?? ""),
+      sourceDeviceId,
       createdBy: uid,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -333,7 +406,7 @@ export const createReservationEvent = onCall({ region }, async (request) => {
         nickname: String(request.data?.nickname ?? ""),
         roomName: String(request.data?.roomName ?? ""),
         businessDate,
-        sourceDeviceId: String(request.data?.sourceDeviceId ?? ""),
+        sourceDeviceId,
         createdBy: uid,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

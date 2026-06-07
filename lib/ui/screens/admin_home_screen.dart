@@ -7,6 +7,7 @@ import 'tenant_members_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_history_screen.dart';
 import 'admin_items_screen.dart';
+import 'tenant_devices_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -27,6 +28,18 @@ class AdminHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('${tenant.tenantName} 관리자'),
         actions: [
+          IconButton(
+            tooltip: '연결 기기 관리',
+            onPressed: canManage
+                ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TenantDevicesScreen(),
+                      ),
+                    )
+                : null,
+            icon: const Icon(Icons.devices_outlined),
+          ),
           IconButton(
             tooltip: '예약 항목 현황',
             onPressed: canManage
