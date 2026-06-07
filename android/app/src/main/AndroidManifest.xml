@@ -41,6 +41,12 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".ForegroundKeepAliveService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

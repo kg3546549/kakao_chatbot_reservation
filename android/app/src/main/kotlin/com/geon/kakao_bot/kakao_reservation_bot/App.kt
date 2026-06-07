@@ -28,6 +28,7 @@ class App : Application() {
         FirebaseApp.initializeApp(this)
         FirebaseCrashlytics.getInstance().log("App.onCreate — 프로세스 시작")
         initFlutterEngine()
+        ForegroundKeepAliveService.start(this)
     }
 
     private fun initFlutterEngine() {

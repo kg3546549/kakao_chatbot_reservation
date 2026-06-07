@@ -1,13 +1,9 @@
 package com.geon.kakao_bot.kakao_reservation_bot
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.RemoteInput
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -20,8 +16,6 @@ import io.flutter.plugin.common.MethodChannel
 class NotificationService : NotificationListenerService() {
 
     private val TAG = "NotificationService"
-    private val NOTIF_CHANNEL_ID = "kakao_bot_foreground"
-    private val FOREGROUND_NOTIF_ID = 9001
 
     private lateinit var analytics: FirebaseAnalytics
     private lateinit var crashlytics: FirebaseCrashlytics
@@ -29,6 +23,10 @@ class NotificationService : NotificationListenerService() {
     companion object {
         var replyActions = mutableMapOf<String, Notification.Action>()
         var instance: NotificationService? = null
+
+        fun requestRebindSafely(context: android.content.Context) {
+            requestRebind(ComponentName(context, NotificationService::class.java))
+        }
     }
 
     // ─── 생명주기 ─────────────────────────────────────────────────────────────
@@ -41,8 +39,6 @@ class NotificationService : NotificationListenerService() {
 
         crashlytics.log("NotificationService.onCreate")
         logEvent("service_created")
-
-        startForegroundCompat()
     }
 
     override fun onDestroy() {
@@ -64,7 +60,7 @@ class NotificationService : NotificationListenerService() {
         crashlytics.log("onListenerDisconnected — 재연결 요청")
         logEvent("listener_disconnected")
         Log.w(TAG, "리스너 끊김, 재연결 요청")
-        requestRebind(ComponentName(this, NotificationService::class.java))
+        requestRebindSafely(this)
         super.onListenerDisconnected()
     }
 
@@ -157,40 +153,6 @@ class NotificationService : NotificationListenerService() {
             logEvent("reply_failed", "reason" to "exception", "room" to roomName)
             false
         }
-    }
-
-    // ─── Foreground Service ───────────────────────────────────────────────────
-
-    private fun startForegroundCompat() {
-        createNotificationChannel()
-        val notification = Notification.Builder(this, NOTIF_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("카카오봇 실행 중")
-            .setContentText("예약 명령어를 감지하고 있습니다")
-            .setOngoing(true)
-            .build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                FOREGROUND_NOTIF_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
-            )
-        } else {
-            startForeground(FOREGROUND_NOTIF_ID, notification)
-        }
-    }
-
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            NOTIF_CHANNEL_ID,
-            "카카오봇 서비스",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "카카오톡 알림 감지 서비스"
-            setShowBadge(false)
-        }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     // ─── Firebase Analytics 헬퍼 ─────────────────────────────────────────────
