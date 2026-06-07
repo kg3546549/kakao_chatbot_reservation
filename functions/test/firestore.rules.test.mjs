@@ -28,6 +28,20 @@ before(async () => {
       role: "manager",
       status: "active",
     });
+    await setDoc(doc(db, "tenants/tenant-a/members/bot-user"), {
+      role: "botDevice",
+      status: "active",
+    });
+    await setDoc(doc(db, "tenants/tenant-a/devices/bot-device"), {
+      uid: "bot-user",
+      mode: "bot",
+      status: "active",
+    });
+    await setDoc(doc(db, "tenants/tenant-a/devices/other-device"), {
+      uid: "other-user",
+      mode: "bot",
+      status: "active",
+    });
     await setDoc(doc(db, "tenants/tenant-a/currentReservations/reservation-a"), {
       nickname: "예약자",
     });
@@ -60,6 +74,23 @@ test("member cannot read another tenant reservations", async () => {
   const db = env.authenticatedContext("user-a").firestore();
   await assertFails(
     getDoc(doc(db, "tenants/tenant-b/currentReservations/reservation-b")),
+  );
+});
+
+test("bot device cannot read tenant reservations", async () => {
+  const db = env.authenticatedContext("bot-user").firestore();
+  await assertFails(
+    getDoc(doc(db, "tenants/tenant-a/currentReservations/reservation-a")),
+  );
+});
+
+test("bot device can read only its own device", async () => {
+  const db = env.authenticatedContext("bot-user").firestore();
+  await assertSucceeds(
+    getDoc(doc(db, "tenants/tenant-a/devices/bot-device")),
+  );
+  await assertFails(
+    getDoc(doc(db, "tenants/tenant-a/devices/other-device")),
   );
 });
 

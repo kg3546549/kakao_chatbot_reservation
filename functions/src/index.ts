@@ -361,9 +361,17 @@ export const createReservationEvent = onCall({ region }, async (request) => {
   if (!tenantId || !eventId || !reservationId) {
     throw new HttpsError("invalid-argument", "필수 예약 식별자가 없습니다.");
   }
-  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  const member = await requireMembership(
+    uid,
+    tenantId,
+    ["owner", "manager", "botDevice"],
+  );
   const sourceDeviceId = String(request.data?.sourceDeviceId ?? "");
-  if (sourceDeviceId !== "admin") {
+  if (sourceDeviceId === "admin") {
+    if (!["owner", "manager"].includes(member.get("role") as Role)) {
+      throw new HttpsError("permission-denied", "관리자 예약 권한이 없습니다.");
+    }
+  } else {
     const tenant = await db.doc(`tenants/${tenantId}`).get();
     const device = await db.doc(`tenants/${tenantId}/devices/${sourceDeviceId}`).get();
     if (

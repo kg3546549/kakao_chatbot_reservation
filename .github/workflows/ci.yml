@@ -42,5 +42,7 @@ jobs:
         working-directory: functions
       - run: npm run build
         working-directory: functions
+      - run: npm run lint
+        working-directory: functions
       - run: npm install --global firebase-tools
       - run: firebase emulators:exec --project demo-kakao-reservation-rules --only firestore "npm --prefix functions run test:rules"

@@ -25,6 +25,11 @@ service cloud.firestore {
         && membership(tenantId).data.status == "active";
     }
 
+    function isHumanMember(tenantId) {
+      return isTenantMember(tenantId)
+        && membership(tenantId).data.role in ["owner", "manager", "viewer"];
+    }
+
     function canManageTenant(tenantId) {
       return isPlatformAdmin()
         || (isTenantMember(tenantId)
@@ -46,37 +51,40 @@ service cloud.firestore {
       allow write: if false;
 
       match /members/{userId} {
-        allow read: if isTenantMember(tenantId) || isPlatformAdmin();
+        allow read: if isHumanMember(tenantId) || isPlatformAdmin();
         allow write: if false;
       }
 
       match /devices/{deviceId} {
-        allow read: if isTenantMember(tenantId) || isPlatformAdmin();
+        allow read: if isPlatformAdmin()
+          || isHumanMember(tenantId)
+          || (isTenantMember(tenantId)
+            && resource.data.uid == request.auth.uid);
         allow write: if false;
       }
 
       match /items/{itemId} {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isHumanMember(tenantId);
         allow write: if canManageTenant(tenantId);
       }
 
       match /rooms/{roomId} {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isHumanMember(tenantId);
         allow write: if canManageTenant(tenantId);
       }
 
       match /reservationEvents/{eventId} {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isHumanMember(tenantId);
         allow write: if false;
       }
 
       match /currentReservations/{reservationId} {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isHumanMember(tenantId);
         allow write: if false;
       }
 
       match /dailyStats/{date} {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isHumanMember(tenantId);
         allow write: if false;
       }
 
