@@ -122,6 +122,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                     child: const Text('새 계정 만들기'),
                   ),
+                  TextButton(
+                    onPressed: session.busy
+                        ? null
+                        : () => session.sendPasswordReset(emailController.text),
+                    child: const Text('비밀번호 재설정 메일 보내기'),
+                  ),
                 ],
               ),
             ),

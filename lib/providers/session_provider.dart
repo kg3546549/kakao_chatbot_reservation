@@ -89,6 +89,7 @@ class SessionProvider with ChangeNotifier {
         }
       }
       tenants = activeTenants;
+      await _restoreLastSession();
       initializing = false;
       notifyListeners();
     }, onError: (Object error) {
@@ -112,9 +113,20 @@ class SessionProvider with ChangeNotifier {
         ));
   }
 
+  Future<void> sendPasswordReset(String email) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      errorMessage = '비밀번호를 재설정할 이메일을 입력하세요.';
+      notifyListeners();
+      return;
+    }
+    await _run(() => _auth.sendPasswordResetEmail(email: normalizedEmail));
+  }
+
   Future<void> signOut() async {
     await _deactivateCurrentDevice();
     await _setNativeBotMode(false);
+    await _clearSavedSession();
     await _auth.signOut();
   }
 
@@ -126,9 +138,11 @@ class SessionProvider with ChangeNotifier {
     });
   }
 
-  void selectTenant(TenantMembership tenant) {
+  Future<void> selectTenant(TenantMembership tenant) async {
     selectedTenant = tenant;
     mode = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_tenant_id', tenant.tenantId);
     notifyListeners();
   }
 
@@ -136,6 +150,10 @@ class SessionProvider with ChangeNotifier {
     selectedTenant = null;
     mode = null;
     CloudSyncService.instance.clear();
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove('selected_tenant_id');
+      prefs.remove('selected_mode');
+    });
     notifyListeners();
   }
 
@@ -166,6 +184,7 @@ class SessionProvider with ChangeNotifier {
         deviceId: deviceId,
         token: token,
       );
+      await prefs.setString('selected_mode', nextMode.name);
     });
   }
 
@@ -174,6 +193,8 @@ class SessionProvider with ChangeNotifier {
     await _setNativeBotMode(false);
     mode = null;
     CloudSyncService.instance.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('selected_mode');
     notifyListeners();
   }
 
@@ -276,6 +297,58 @@ class SessionProvider with ChangeNotifier {
     } on PlatformException catch (error) {
       debugPrint('Failed to switch native bot mode: $error');
     }
+  }
+
+  Future<void> _restoreLastSession() async {
+    if (selectedTenant != null || mode != null || user == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final tenantId = prefs.getString('selected_tenant_id');
+    final modeName = prefs.getString('selected_mode');
+    if (tenantId == null || modeName == null) return;
+
+    TenantMembership? tenant;
+    for (final candidate in tenants) {
+      if (candidate.tenantId == tenantId) {
+        tenant = candidate;
+        break;
+      }
+    }
+    if (tenant == null) {
+      await _clearSavedSession();
+      await _setNativeBotMode(false);
+      return;
+    }
+
+    final restoredMode = modeName == AppMode.bot.name
+        ? AppMode.bot
+        : modeName == AppMode.admin.name
+            ? AppMode.admin
+            : null;
+    if (restoredMode == null ||
+        (restoredMode == AppMode.bot &&
+            !['owner', 'manager', 'botDevice'].contains(tenant.role))) {
+      await _clearSavedSession();
+      await _setNativeBotMode(false);
+      return;
+    }
+
+    selectedTenant = tenant;
+    mode = restoredMode;
+    final deviceId = prefs.getString('device_id');
+    if (deviceId != null) {
+      CloudSyncService.instance.configure(
+        tenantId: tenant.tenantId,
+        deviceId: deviceId,
+      );
+      await _setNativeBotMode(restoredMode == AppMode.bot);
+      await _registerCurrentDevice(deviceId: deviceId);
+    }
+  }
+
+  Future<void> _clearSavedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('selected_tenant_id');
+    await prefs.remove('selected_mode');
   }
 
   Future<void> _registerCurrentDevice({
