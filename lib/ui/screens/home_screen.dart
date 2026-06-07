@@ -4,6 +4,8 @@ import 'history_tab.dart';
 import 'statistics_tab.dart';
 import 'templates_tab.dart';
 import 'settings_tab.dart';
+import 'package:provider/provider.dart';
+import '../../providers/session_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -60,6 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.edit_note), label: '항목 설정'),
           NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        tooltip: '모드 변경',
+        onPressed: () => context.read<SessionProvider>().leaveMode(),
+        child: const Icon(Icons.swap_horiz),
       ),
     );
   }

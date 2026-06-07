@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 3;
 
   factory DatabaseService() => _instance;
   DatabaseService._internal();
@@ -61,10 +61,14 @@ class DatabaseService {
             content TEXT
           )
         ''');
+        await _createSyncQueue(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _cleanupOrphanReservations(db);
+        }
+        if (oldVersion < 3) {
+          await _createSyncQueue(db);
         }
       },
       onOpen: (db) async {
@@ -78,6 +82,20 @@ class DatabaseService {
       'reservations',
       where: 'item_id NOT IN (SELECT id FROM items)',
     );
+  }
+
+  Future<void> _createSyncQueue(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_queue(
+        event_id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
   }
 
   // Items
@@ -95,8 +113,8 @@ class DatabaseService {
 
   Future<int> updateItem(Item item) async {
     final db = await database;
-    return await db.update('items', item.toMap(),
-        where: 'id = ?', whereArgs: [item.id]);
+    return await db
+        .update('items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
   }
 
   Future<int> deleteItem(int id) async {
@@ -110,7 +128,8 @@ class DatabaseService {
     return await db.insert('reservations', res.toMap());
   }
 
-  Future<List<Reservation>> getReservations({int? itemId, DateTime? date}) async {
+  Future<List<Reservation>> getReservations(
+      {int? itemId, DateTime? date}) async {
     final db = await database;
     String? where;
     List<dynamic>? whereArgs;
@@ -146,11 +165,12 @@ class DatabaseService {
     final db = await database;
     if (date != null) {
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
-      return await db.delete('reservations', 
-          where: 'item_id = ? AND created_at LIKE ?', 
+      return await db.delete('reservations',
+          where: 'item_id = ? AND created_at LIKE ?',
           whereArgs: [itemId, '$dateStr%']);
     }
-    return await db.delete('reservations', where: 'item_id = ?', whereArgs: [itemId]);
+    return await db
+        .delete('reservations', where: 'item_id = ?', whereArgs: [itemId]);
   }
 
   // Rooms
@@ -168,8 +188,8 @@ class DatabaseService {
 
   Future<int> updateRoom(Room room) async {
     final db = await database;
-    return await db.update('rooms', room.toMap(),
-        where: 'id = ?', whereArgs: [room.id]);
+    return await db
+        .update('rooms', room.toMap(), where: 'id = ?', whereArgs: [room.id]);
   }
 
   Future<Room?> getRoomByName(String name) async {
@@ -197,5 +217,55 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getLogs() async {
     final db = await database;
     return await db.query('logs', orderBy: 'timestamp DESC', limit: 100);
+  }
+
+  // Cloud sync queue
+  Future<void> enqueueSyncEvent(String eventId, String payload) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert(
+      'sync_queue',
+      {
+        'event_id': eventId,
+        'payload': payload,
+        'status': 'pending',
+        'attempts': 0,
+        'created_at': now,
+        'updated_at': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingSyncEvents(
+      {int limit = 50}) async {
+    final db = await database;
+    return db.query(
+      'sync_queue',
+      where: 'status IN (?, ?)',
+      whereArgs: ['pending', 'failed'],
+      orderBy: 'created_at ASC',
+      limit: limit,
+    );
+  }
+
+  Future<void> markSyncEventCompleted(String eventId) async {
+    final db = await database;
+    await db.delete('sync_queue', where: 'event_id = ?', whereArgs: [eventId]);
+  }
+
+  Future<void> markSyncEventFailed(String eventId, Object error) async {
+    final db = await database;
+    await db.rawUpdate(
+      '''
+      UPDATE sync_queue
+      SET status = 'failed',
+          attempts = attempts + 1,
+          last_error = ?,
+          updated_at = ?
+      WHERE event_id = ?
+      ''',
+      [error.toString(), DateTime.now().toIso8601String(), eventId],
+    );
   }
 }

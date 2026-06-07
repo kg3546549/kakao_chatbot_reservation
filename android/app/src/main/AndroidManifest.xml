@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="카카오톡 예약봇"
+        android:label="카카오톡 예약 관리"
         android:name=".App"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -71,6 +71,10 @@ class NotificationService : NotificationListenerService() {
     // ─── 알림 수신 ────────────────────────────────────────────────────────────
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        val botModeEnabled = getSharedPreferences(App.PREFS, MODE_PRIVATE)
+            .getBoolean(App.BOT_MODE_ENABLED, false)
+        if (!botModeEnabled) return
+
         val packageName = sbn.packageName
         if (packageName != "com.kakao.talk") return
 

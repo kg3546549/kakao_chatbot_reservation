@@ -9,12 +9,14 @@ import '../models/item.dart';
 import '../models/reservation.dart';
 import '../models/room.dart';
 import '../services/database_service.dart';
+import '../services/cloud_sync_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BotProvider with ChangeNotifier {
   final DatabaseService _db = DatabaseService();
-  final MethodChannel _channel = const MethodChannel('com.geon.kakao_bot/notification');
+  final MethodChannel _channel =
+      const MethodChannel('com.geon.kakao_bot/notification');
   Timer? _cutoffTimer;
   DateTime? _lastBusinessDate;
 
@@ -58,14 +60,16 @@ class BotProvider with ChangeNotifier {
     _allReservations = await _db.getReservations();
     _rooms = _sortRooms(await _db.getRooms());
     await _loadPreferences();
-    
+
     try {
       _isServiceEnabled = await _channel.invokeMethod('checkPermission');
-      _isBatteryOptimized = await _channel.invokeMethod('checkBatteryOptimization');
+      _isBatteryOptimized =
+          await _channel.invokeMethod('checkBatteryOptimization');
     } catch (e, stack) {
       debugPrint("Native call failed: $e");
       FirebaseCrashlytics.instance.recordError(
-        e, stack,
+        e,
+        stack,
         reason: 'Native 초기화 실패',
         fatal: false,
       );
@@ -82,7 +86,8 @@ class BotProvider with ChangeNotifier {
     cmdMax = prefs.getString('cmd_max') ?? "세팅최대";
     cmdTemplate = prefs.getString('cmd_template') ?? "텍스트변경";
     cmdTotal = prefs.getString('cmd_total') ?? "전체조회";
-    totalTemplate = prefs.getString('total_template') ?? "📊 전체 예약 현황 📊\n{전체현황}";
+    totalTemplate =
+        prefs.getString('total_template') ?? "📊 전체 예약 현황 📊\n{전체현황}";
     resetHour = prefs.getInt('reset_hour') ?? 0;
     resetMinute = prefs.getInt('reset_minute') ?? 0;
   }
@@ -153,7 +158,9 @@ class BotProvider with ChangeNotifier {
 
   void _removeItemFromCache(int id) {
     _items = _items.where((item) => item.id != id).toList();
-    _allReservations = _allReservations.where((reservation) => reservation.itemId != id).toList();
+    _allReservations = _allReservations
+        .where((reservation) => reservation.itemId != id)
+        .toList();
   }
 
   void _startCutoffWatcher() {
@@ -161,7 +168,8 @@ class BotProvider with ChangeNotifier {
     _cutoffTimer?.cancel();
     _cutoffTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       final currentBusinessDate = businessDate;
-      if (_lastBusinessDate == null || !_isSameDay(_lastBusinessDate!, currentBusinessDate)) {
+      if (_lastBusinessDate == null ||
+          !_isSameDay(_lastBusinessDate!, currentBusinessDate)) {
         _lastBusinessDate = currentBusinessDate;
         notifyListeners();
       }
@@ -217,7 +225,7 @@ class BotProvider with ChangeNotifier {
     await prefs.setString('cmd_max', max);
     await prefs.setString('cmd_template', template);
     await prefs.setString('cmd_total', total);
-    
+
     cmdReserve = reserve;
     cmdCancel = cancel;
     cmdStatus = status;
@@ -240,11 +248,15 @@ class BotProvider with ChangeNotifier {
       final newRoom = Room(name: roomName, type: RoomType.general);
       try {
         final roomId = await _db.insertRoom(newRoom);
-        _rooms = _sortRooms([..._rooms, Room(id: roomId, name: roomName, type: RoomType.general)]);
+        _rooms = _sortRooms([
+          ..._rooms,
+          Room(id: roomId, name: roomName, type: RoomType.general)
+        ]);
       } on DatabaseException {
         final existingRoom = await _db.getRoomByName(roomName);
         if (existingRoom != null) {
-          _rooms = _sortRooms([..._rooms.where((r) => r.name != roomName), existingRoom]);
+          _rooms = _sortRooms(
+              [..._rooms.where((r) => r.name != roomName), existingRoom]);
         }
       }
       notifyListeners();
@@ -273,25 +285,34 @@ class BotProvider with ChangeNotifier {
     try {
       item = _items.firstWhere((i) => i.name == itemName);
     } catch (e) {
-      return; 
+      return;
     }
 
     // 3. Execute
     if (commandText == cmdReserve) {
       if (parts.length < 3) return;
       final rawNicks = parts.sublist(2).join(' ');
-      final nicknames = rawNicks.split(RegExp(r'[,|]')).map((s) => s.trim()).where((s) => s.isNotEmpty);
+      final nicknames = rawNicks
+          .split(RegExp(r'[,|]'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty);
       final newReservations = <Reservation>[];
       for (var nick in nicknames) {
-        final reservation = Reservation(itemId: item.id!, nickname: nick, roomName: roomName);
+        final reservation =
+            Reservation(itemId: item.id!, nickname: nick, roomName: roomName);
         final reservationId = await _db.insertReservation(reservation);
-        newReservations.add(Reservation(
+        final savedReservation = Reservation(
           id: reservationId,
           itemId: reservation.itemId,
           nickname: reservation.nickname,
           roomName: reservation.roomName,
           createdAt: reservation.createdAt,
-        ));
+        );
+        newReservations.add(savedReservation);
+        await CloudSyncService.instance.publishReservationCreated(
+          reservation: savedReservation,
+          item: item,
+        );
       }
       _allReservations = [..._allReservations, ...newReservations];
       await _sendReply(roomName, await _formatStatus(item, date: _today()));
@@ -299,14 +320,23 @@ class BotProvider with ChangeNotifier {
     } else if (commandText == cmdCancel) {
       if (parts.length < 3) return;
       final rawNicks = parts.sublist(2).join(' ');
-      final nicknames = rawNicks.split(RegExp(r'[,|]')).map((s) => s.trim()).where((s) => s.isNotEmpty);
+      final nicknames = rawNicks
+          .split(RegExp(r'[,|]'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty);
       final targetDate = _today();
-      final currentReservations = await _db.getReservations(itemId: item.id!, date: targetDate);
+      final currentReservations =
+          await _db.getReservations(itemId: item.id!, date: targetDate);
       for (var nick in nicknames) {
         try {
           final res = currentReservations.firstWhere((r) => r.nickname == nick);
           await _db.deleteReservation(res.id!);
-          _allReservations = _allReservations.where((reservation) => reservation.id != res.id).toList();
+          await CloudSyncService.instance.publishReservationCancelled(
+            reservation: res,
+          );
+          _allReservations = _allReservations
+              .where((reservation) => reservation.id != res.id)
+              .toList();
         } catch (_) {}
       }
       await _sendReply(roomName, await _formatStatus(item, date: targetDate));
@@ -318,8 +348,11 @@ class BotProvider with ChangeNotifier {
       final targetDate = _today();
       final itemId = item.id!;
       await _db.clearReservations(item.id!, date: targetDate);
+      await CloudSyncService.instance
+          .publishReset(item: item, date: targetDate);
       _allReservations = _allReservations.where((reservation) {
-        return reservation.itemId != itemId || !_isSameDay(reservation.createdAt, targetDate);
+        return reservation.itemId != itemId ||
+            !_isSameDay(reservation.createdAt, targetDate);
       }).toList();
       await _sendReply(roomName, "✅ ${item.name} 항목의 예약이 초기화되었습니다.");
       await _sendReply(roomName, await _formatStatus(item, date: targetDate));
@@ -337,19 +370,20 @@ class BotProvider with ChangeNotifier {
         await _db.updateItem(updatedItem);
         _upsertItemInCache(updatedItem);
         await _sendReply(roomName, "✅ ${item.name} 최대 인원이 $max명으로 변경되었습니다.");
-        await _sendReply(roomName, await _formatStatus(updatedItem, date: _today()));
+        await _sendReply(
+            roomName, await _formatStatus(updatedItem, date: _today()));
         notifyListeners();
       }
     } else if (commandText == cmdTemplate) {
       if (room.type != RoomType.admin) return;
-      
+
       // 명령어 이후의 모든 텍스트를 추출 (줄바꿈 포함)
       // '/메인 텍스트변경 [내용]' 구조에서 [내용] 부분 전체 추출
       final firstSpace = message.indexOf(' ');
       if (firstSpace == -1) return;
       final secondSpace = message.indexOf(' ', firstSpace + 1);
       if (secondSpace == -1) return;
-      
+
       final newTemplate = message.substring(secondSpace + 1).trim();
       if (newTemplate.isEmpty) return;
 
@@ -360,7 +394,7 @@ class BotProvider with ChangeNotifier {
           template: newTemplate);
       await _db.updateItem(updatedItem);
       _upsertItemInCache(updatedItem);
-      
+
       await _sendReply(roomName, "✅ ${item.name} 항목의 공지 텍스트가 변경되었습니다.");
       notifyListeners();
     }
@@ -378,10 +412,12 @@ class BotProvider with ChangeNotifier {
 
   Future<String> _formatStatus(Item item, {DateTime? date}) async {
     final targetDate = date ?? _today();
-    final reservations = await _db.getReservations(itemId: item.id!, date: targetDate);
+    final reservations =
+        await _db.getReservations(itemId: item.id!, date: targetDate);
     String template = item.template;
     if (template.isEmpty) {
-      template = "🎊 {날짜} ${item.name} 예약창🎊\n엔트리 : {인원셋팅} MAX\n❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒\n{명단}";
+      template =
+          "🎊 {날짜} ${item.name} 예약창🎊\n엔트리 : {인원셋팅} MAX\n❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒ ❒\n{명단}";
     }
 
     final dateStr = DateFormat('yyyy년 MM월 dd일').format(targetDate);
@@ -409,7 +445,8 @@ class BotProvider with ChangeNotifier {
     } catch (e, stack) {
       await _db.addLog("오류", "답장 실패 ($roomName): $e");
       FirebaseCrashlytics.instance.recordError(
-        e, stack,
+        e,
+        stack,
         reason: 'sendReply 실패: $roomName',
         fatal: false,
       );
@@ -423,7 +460,7 @@ class BotProvider with ChangeNotifier {
       final res = await _db.getReservations(itemId: item.id!, date: targetDate);
       listStr += "- ${item.name}: ${res.length}/${item.maxCapacity}\n";
     }
-    
+
     final finalMessage = totalTemplate.replaceAll('{전체현황}', listStr);
     await _sendReply(roomName, finalMessage);
   }
@@ -441,7 +478,8 @@ class BotProvider with ChangeNotifier {
   Future<void> addItem(String name, int max) async {
     final normalized = _normalizeItemName(name);
     _validateItemInput(name: normalized, maxCapacity: max);
-    final itemId = await _db.insertItem(Item(name: normalized, maxCapacity: max));
+    final itemId =
+        await _db.insertItem(Item(name: normalized, maxCapacity: max));
     _items = [..._items, Item(id: itemId, name: normalized, maxCapacity: max)];
     notifyListeners();
   }

@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformAdmin() {
+      return signedIn() && request.auth.token.platformAdmin == true;
+    }
+
+    function membership(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
+    }
+
+    function isTenantMember(tenantId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid))
+        && membership(tenantId).data.status == "active";
+    }
+
+    function canManageTenant(tenantId) {
+      return isPlatformAdmin()
+        || (isTenantMember(tenantId)
+          && membership(tenantId).data.role in ["owner", "manager"]);
+    }
+
+    match /users/{userId} {
+      allow read, update: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId;
+
+      match /tenantMemberships/{tenantId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isTenantMember(tenantId) || isPlatformAdmin();
+      allow write: if false;
+
+      match /members/{userId} {
+        allow read: if isTenantMember(tenantId) || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read: if isTenantMember(tenantId) || isPlatformAdmin();
+        allow write: if false;
+      }
+
+      match /items/{itemId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if canManageTenant(tenantId);
+      }
+
+      match /rooms/{roomId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if canManageTenant(tenantId);
+      }
+
+      match /reservationEvents/{eventId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if false;
+      }
+
+      match /currentReservations/{reservationId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if false;
+      }
+
+      match /dailyStats/{date} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if false;
+      }
+    }
+  }
+}

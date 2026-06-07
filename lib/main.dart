@@ -2,16 +2,24 @@ import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/bot_provider.dart';
-import 'ui/screens/home_screen.dart';
+import 'providers/session_provider.dart';
+import 'ui/screens/auth_gate.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Flutter 프레임워크 오류 → Crashlytics
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
@@ -26,6 +34,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => BotProvider()),
+        ChangeNotifierProvider(create: (_) => SessionProvider()),
       ],
       child: const MyApp(),
     ),
@@ -38,7 +47,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '카카오톡 예약봇',
+      title: '카카오톡 예약 관리',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -64,14 +73,16 @@ class MyApp extends StatelessWidget {
           color: Colors.white,
           elevation: 2,
           shadowColor: Colors.black.withValues(alpha: 0.1),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF40916C),
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             elevation: 0,
           ),
         ),
@@ -79,11 +90,14 @@ class MyApp extends StatelessWidget {
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFF40916C).withValues(alpha: 0.1),
           labelTextStyle: WidgetStateProperty.all(
-            const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF40916C)),
+            const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF40916C)),
           ),
         ),
       ),
-      home: const HomeScreen(),
+      home: const AuthGate(),
     );
   }
 }

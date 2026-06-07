@@ -19,12 +19,6 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         (application as App).currentActivity = WeakReference(this)
-        ForegroundKeepAliveService.start(this)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        ForegroundKeepAliveService.start(this)
     }
 
     override fun onDestroy() {

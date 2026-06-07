@@ -1,10 +1,13 @@
 package com.geon.kakao_bot.kakao_reservation_bot
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
+import android.os.Build
 import android.provider.Settings
 import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
@@ -19,6 +22,8 @@ class App : Application() {
     companion object {
         const val ENGINE_ID = "my_engine_id"
         const val CHANNEL = "com.geon.kakao_bot/notification"
+        const val PREFS = "kakao_reservation_prefs"
+        const val BOT_MODE_ENABLED = "bot_mode_enabled"
     }
 
     var currentActivity: WeakReference<MainActivity>? = null
@@ -27,8 +32,8 @@ class App : Application() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
         FirebaseCrashlytics.getInstance().log("App.onCreate — 프로세스 시작")
+        createAdminNotificationChannel()
         initFlutterEngine()
-        ForegroundKeepAliveService.start(this)
     }
 
     private fun initFlutterEngine() {
@@ -73,6 +78,11 @@ class App : Application() {
                             result.error("NO_ACTIVITY", "앱을 열고 다시 시도해주세요", null)
                         }
                     }
+                    "setBotMode" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        setBotMode(enabled)
+                        result.success(null)
+                    }
                     "sendReply" -> {
                         val roomName = call.argument<String>("roomName")
                         val message = call.argument<String>("message")
@@ -103,5 +113,33 @@ class App : Application() {
         )
         FlutterEngineCache.getInstance().put(ENGINE_ID, engine)
         FirebaseCrashlytics.getInstance().log("FlutterEngine 초기화 완료")
+    }
+
+    private fun setBotMode(enabled: Boolean) {
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(BOT_MODE_ENABLED, enabled)
+            .apply()
+
+        if (enabled) {
+            ForegroundKeepAliveService.start(this)
+            NotificationService.requestRebindSafely(this)
+        } else {
+            ForegroundKeepAliveService.stop(this)
+        }
+        FirebaseCrashlytics.getInstance().log("Bot mode changed: enabled=$enabled")
+    }
+
+    private fun createAdminNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            "reservation_updates",
+            "예약 알림",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "새 예약과 예약 변경 알림"
+        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 }

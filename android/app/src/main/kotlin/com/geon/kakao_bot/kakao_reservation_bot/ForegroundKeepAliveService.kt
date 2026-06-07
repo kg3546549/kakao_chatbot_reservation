@@ -130,5 +130,9 @@ class ForegroundKeepAliveService : Service() {
             val intent = Intent(context, ForegroundKeepAliveService::class.java)
             ContextCompat.startForegroundService(context, intent)
         }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, ForegroundKeepAliveService::class.java))
+        }
     }
 }
