@@ -10,6 +10,7 @@ initializeApp();
 
 const db = getFirestore();
 const region = "asia-northeast3";
+const bootstrapAdminEmail = "kg354654932@gmail.com";
 
 type Role = "owner" | "manager" | "viewer" | "botDevice";
 
@@ -95,6 +96,12 @@ export const updateTenantStatus = onCall({ region }, async (request) => {
 export const bootstrapPlatformAdmin = onCall({ region }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (request.auth?.token.email !== bootstrapAdminEmail) {
+    throw new HttpsError(
+      "permission-denied",
+      "지정된 최초 플랫폼 관리자 계정만 설정할 수 있습니다.",
+    );
+  }
   const bootstrapRef = db.doc("system/platformAdminBootstrap");
 
   await db.runTransaction(async (transaction) => {
@@ -305,9 +312,9 @@ export const createReservationEvent = onCall({ region }, async (request) => {
       .where("itemId", "==", itemId)
       .where("businessDate", "==", businessDate)
       .get();
-    const batch = db.batch();
-    reservations.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
+    const writer = db.bulkWriter();
+    reservations.docs.forEach((doc) => writer.delete(doc.ref));
+    await writer.close();
   }
   return { success: true };
 });
@@ -322,29 +329,49 @@ export const notifyReservationCreated = onDocumentCreated(
       .where("mode", "==", "admin")
       .where("status", "==", "active")
       .get();
-    const tokens = devices.docs.map((doc) => String(doc.get("fcmToken") ?? ""))
-      .filter(Boolean);
-    if (tokens.length === 0) return;
+    const recipients = devices.docs
+      .map((doc) => ({ doc, token: String(doc.get("fcmToken") ?? "") }))
+      .filter((recipient) => recipient.token.length > 0);
 
-    await getMessaging().sendEachForMulticast({
-      tokens,
-      notification: {
-        title: "새 예약이 들어왔습니다",
-        body: `${data.nickname || "고객"}님의 예약이 등록되었습니다.`,
-      },
-      data: {
-        type: "reservation_created",
-        tenantId: event.params.tenantId,
-        reservationId: String(data.reservationId),
-        itemId: String(data.itemId ?? ""),
-      },
-      android: {
-        priority: "high",
-        notification: { channelId: "reservation_updates" },
-      },
-    });
+    for (let offset = 0; offset < recipients.length; offset += 500) {
+      const chunk = recipients.slice(offset, offset + 500);
+      const response = await getMessaging().sendEachForMulticast({
+        tokens: chunk.map((recipient) => recipient.token),
+        notification: {
+          title: "새 예약이 들어왔습니다",
+          body: `${data.nickname || "고객"}님의 예약이 등록되었습니다.`,
+        },
+        data: {
+          type: "reservation_created",
+          tenantId: event.params.tenantId,
+          reservationId: String(data.reservationId),
+          itemId: String(data.itemId ?? ""),
+        },
+        android: {
+          priority: "high",
+          notification: { channelId: "reservation_updates" },
+        },
+      });
+
+      const writer = db.bulkWriter();
+      response.responses.forEach((result, index) => {
+        if (!result.success && isInvalidFcmToken(result.error?.code)) {
+          writer.set(chunk[index].doc.ref, {
+            fcmToken: "",
+            status: "inactive",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+      });
+      await writer.close();
+    }
   },
 );
+
+function isInvalidFcmToken(code?: string) {
+  return code === "messaging/invalid-registration-token"
+    || code === "messaging/registration-token-not-registered";
+}
 
 export const aggregateDailyReservationStats = onDocumentCreated(
   { region, document: "tenants/{tenantId}/reservationEvents/{eventId}" },

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/session_provider.dart';
 import 'tenant_members_screen.dart';
 import 'admin_analytics_screen.dart';
+import 'admin_history_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -25,6 +26,14 @@ class AdminHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('${tenant.tenantName} 관리자'),
         actions: [
+          IconButton(
+            tooltip: '예약 이력',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminHistoryScreen()),
+            ),
+            icon: const Icon(Icons.history),
+          ),
           IconButton(
             tooltip: '예약 분석',
             onPressed: () => Navigator.push(
