@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/session_provider.dart';
 import 'home_screen.dart';
 import 'admin_home_screen.dart';
+import 'platform_tenants_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -141,6 +142,17 @@ class TenantSelectionScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('가게 선택'),
         actions: [
+          if (session.platformAdmin)
+            IconButton(
+              tooltip: '전체 가게 관리',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PlatformTenantsScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+            ),
           IconButton(
               onPressed: session.signOut, icon: const Icon(Icons.logout)),
         ],
@@ -167,6 +179,12 @@ class TenantSelectionScreen extends StatelessWidget {
             icon: const Icon(Icons.add_business),
             label: const Text('새 가게 만들기'),
           ),
+          if (!session.platformAdmin)
+            TextButton.icon(
+              onPressed: session.busy ? null : session.bootstrapPlatformAdmin,
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              label: const Text('최초 플랫폼 운영자로 설정'),
+            ),
           if (session.errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),

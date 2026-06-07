@@ -31,6 +31,7 @@ class SessionProvider with ChangeNotifier {
   List<TenantMembership> tenants = [];
   TenantMembership? selectedTenant;
   AppMode? mode;
+  bool platformAdmin = false;
   bool initializing = true;
   bool busy = false;
   String? errorMessage;
@@ -48,6 +49,7 @@ class SessionProvider with ChangeNotifier {
     user = nextUser;
     selectedTenant = null;
     mode = null;
+    platformAdmin = false;
     tenants = [];
     await _tenantSubscription?.cancel();
 
@@ -57,6 +59,8 @@ class SessionProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
+    platformAdmin =
+        (await nextUser.getIdTokenResult()).claims?['platformAdmin'] == true;
 
     try {
       await _firestore.collection('users').doc(nextUser.uid).set({
@@ -237,6 +241,25 @@ class SessionProvider with ChangeNotifier {
         'tenantId': tenant.tenantId,
         'memberUid': memberUid,
       });
+    });
+  }
+
+  Future<void> updateTenantStatus(String tenantId, String status) async {
+    await _run(() async {
+      await _functions.httpsCallable('updateTenantStatus').call({
+        'tenantId': tenantId,
+        'status': status,
+      });
+    });
+  }
+
+  Future<void> bootstrapPlatformAdmin() async {
+    await _run(() async {
+      await _functions.httpsCallable('bootstrapPlatformAdmin').call();
+      await user?.getIdToken(true);
+      platformAdmin =
+          (await user?.getIdTokenResult(true))?.claims?['platformAdmin'] ==
+              true;
     });
   }
 

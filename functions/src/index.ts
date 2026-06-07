@@ -13,6 +13,12 @@ const region = "asia-northeast3";
 
 type Role = "owner" | "manager" | "viewer" | "botDevice";
 
+function requirePlatformAdmin(request: { auth?: { token?: Record<string, unknown> } }) {
+  if (request.auth?.token?.platformAdmin !== true) {
+    throw new HttpsError("permission-denied", "플랫폼 관리자 권한이 필요합니다.");
+  }
+}
+
 async function requireMembership(uid: string, tenantId: string, roles?: Role[]) {
   const member = await db.doc(`tenants/${tenantId}/members/${uid}`).get();
   if (!member.exists || member.get("status") !== "active") {
@@ -58,6 +64,52 @@ export const createTenant = onCall({ region }, async (request) => {
   await batch.commit();
 
   return { tenantId };
+});
+
+export const updateTenantStatus = onCall({ region }, async (request) => {
+  requirePlatformAdmin(request);
+  const tenantId = String(request.data?.tenantId ?? "");
+  const status = String(request.data?.status ?? "");
+  if (!tenantId || !["active", "suspended"].includes(status)) {
+    throw new HttpsError("invalid-argument", "유효한 tenantId와 status가 필요합니다.");
+  }
+  await db.doc(`tenants/${tenantId}`).set({
+    status,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: request.auth?.uid,
+  }, { merge: true });
+  return { success: true };
+});
+
+export const bootstrapPlatformAdmin = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const bootstrapRef = db.doc("system/platformAdminBootstrap");
+
+  await db.runTransaction(async (transaction) => {
+    if ((await transaction.get(bootstrapRef)).exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "플랫폼 관리자가 이미 설정되어 있습니다.",
+      );
+    }
+    transaction.create(bootstrapRef, {
+      uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  try {
+    const user = await getAuth().getUser(uid);
+    await getAuth().setCustomUserClaims(uid, {
+      ...user.customClaims,
+      platformAdmin: true,
+    });
+  } catch (error) {
+    await bootstrapRef.delete();
+    throw error;
+  }
+  return { success: true };
 });
 
 export const registerDevice = onCall({ region }, async (request) => {
