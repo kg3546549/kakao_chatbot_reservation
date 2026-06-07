@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -109,6 +110,80 @@ export const unregisterDevice = onCall({ region }, async (request) => {
   return { success: true };
 });
 
+export const addTenantMember = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const email = String(request.data?.email ?? "").trim().toLowerCase();
+  const role = String(request.data?.role ?? "viewer") as Role;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !email) {
+    throw new HttpsError("invalid-argument", "tenantId와 이메일이 필요합니다.");
+  }
+  if (!["owner", "manager", "viewer", "botDevice"].includes(role)) {
+    throw new HttpsError("invalid-argument", "유효하지 않은 역할입니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner"]);
+
+  let targetUser;
+  try {
+    targetUser = await getAuth().getUserByEmail(email);
+  } catch {
+    throw new HttpsError(
+      "not-found",
+      "해당 이메일 계정이 없습니다. 사용자가 먼저 앱에서 계정을 생성해야 합니다.",
+    );
+  }
+
+  const tenant = await db.doc(`tenants/${tenantId}`).get();
+  const tenantName = String(tenant.get("name") ?? "");
+  const memberRef = db.doc(`tenants/${tenantId}/members/${targetUser.uid}`);
+  const userMembershipRef =
+    db.doc(`users/${targetUser.uid}/tenantMemberships/${tenantId}`);
+  const batch = db.batch();
+  batch.set(memberRef, {
+    email,
+    role,
+    status: "active",
+    joinedAt: FieldValue.serverTimestamp(),
+    addedBy: uid,
+  }, { merge: true });
+  batch.set(userMembershipRef, {
+    tenantId,
+    tenantName,
+    role,
+    status: "active",
+    joinedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
+  return { success: true, uid: targetUser.uid };
+});
+
+export const removeTenantMember = onCall({ region }, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const memberUid = String(request.data?.memberUid ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !memberUid) {
+    throw new HttpsError("invalid-argument", "tenantId와 memberUid가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner"]);
+  if (memberUid === uid) {
+    throw new HttpsError("failed-precondition", "본인 owner 권한은 제거할 수 없습니다.");
+  }
+
+  const batch = db.batch();
+  batch.set(db.doc(`tenants/${tenantId}/members/${memberUid}`), {
+    status: "inactive",
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  batch.set(db.doc(`users/${memberUid}/tenantMemberships/${tenantId}`), {
+    status: "inactive",
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
+  return { success: true };
+});
+
 export const createReservationEvent = onCall({ region }, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
@@ -205,5 +280,33 @@ export const notifyReservationCreated = onDocumentCreated(
         notification: { channelId: "reservation_updates" },
       },
     });
+  },
+);
+
+export const aggregateDailyReservationStats = onDocumentCreated(
+  { region, document: "tenants/{tenantId}/reservationEvents/{eventId}" },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    const businessDate = String(data.businessDate ?? "");
+    if (!businessDate) return;
+
+    const statsRef =
+      db.doc(`tenants/${event.params.tenantId}/dailyStats/${businessDate}`);
+    const updates: Record<string, unknown> = {
+      businessDate,
+      updatedAt: FieldValue.serverTimestamp(),
+      totalEvents: FieldValue.increment(1),
+    };
+    if (data.type === "created") {
+      updates.createdCount = FieldValue.increment(1);
+      updates.activeDelta = FieldValue.increment(1);
+    } else if (data.type === "cancelled") {
+      updates.cancelledCount = FieldValue.increment(1);
+      updates.activeDelta = FieldValue.increment(-1);
+    } else if (data.type === "reset") {
+      updates.resetCount = FieldValue.increment(1);
+    }
+    await statsRef.set(updates, { merge: true });
   },
 );

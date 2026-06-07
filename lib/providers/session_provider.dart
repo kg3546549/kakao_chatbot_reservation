@@ -214,6 +214,32 @@ class SessionProvider with ChangeNotifier {
     });
   }
 
+  Future<void> addTenantMember({
+    required String email,
+    required String role,
+  }) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return;
+    await _run(() async {
+      await _functions.httpsCallable('addTenantMember').call({
+        'tenantId': tenant.tenantId,
+        'email': email.trim(),
+        'role': role,
+      });
+    });
+  }
+
+  Future<void> removeTenantMember(String memberUid) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return;
+    await _run(() async {
+      await _functions.httpsCallable('removeTenantMember').call({
+        'tenantId': tenant.tenantId,
+        'memberUid': memberUid,
+      });
+    });
+  }
+
   Future<void> _setNativeBotMode(bool enabled) async {
     try {
       await _channel.invokeMethod('setBotMode', {'enabled': enabled});

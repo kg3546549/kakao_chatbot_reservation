@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
+import 'tenant_members_screen.dart';
+import 'admin_analytics_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -23,6 +25,26 @@ class AdminHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('${tenant.tenantName} 관리자'),
         actions: [
+          IconButton(
+            tooltip: '예약 분석',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminAnalyticsScreen()),
+            ),
+            icon: const Icon(Icons.analytics_outlined),
+          ),
+          IconButton(
+            tooltip: '멤버 관리',
+            onPressed: tenant.role == 'owner'
+                ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TenantMembersScreen(),
+                      ),
+                    )
+                : null,
+            icon: const Icon(Icons.group_outlined),
+          ),
           IconButton(
             tooltip: '모드 변경',
             onPressed: session.leaveMode,
