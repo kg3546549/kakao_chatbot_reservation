@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/database_service.dart';
 import '../../models/reservation.dart';
-import '../../models/item.dart';
 import '../../providers/bot_provider.dart';
 import 'package:intl/intl.dart';
 
@@ -14,7 +13,7 @@ class HistoryTab extends StatelessWidget {
     return Consumer<BotProvider>(
       builder: (context, bot, child) {
         final items = bot.items;
-        
+
         if (items.isEmpty) {
           return Scaffold(
             appBar: AppBar(title: const Text('예약 이력')),
@@ -24,7 +23,8 @@ class HistoryTab extends StatelessWidget {
                 children: [
                   Icon(Icons.history, size: 60, color: Colors.grey.shade300),
                   const SizedBox(height: 16),
-                  const Text('등록된 항목이 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('등록된 항목이 없습니다.',
+                      style: TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
@@ -47,7 +47,9 @@ class HistoryTab extends StatelessWidget {
               ),
             ),
             body: TabBarView(
-              children: items.map((item) => HistoryListView(itemId: item.id!)).toList(),
+              children: items
+                  .map((item) => HistoryListView(itemId: item.id!))
+                  .toList(),
             ),
           ),
         );
@@ -76,13 +78,18 @@ class _HistoryListViewState extends State<HistoryListView> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('예약 리스트', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B4332))),
+              const Text('예약 리스트',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B4332))),
               Row(
                 children: [
                   if (_filterDate != null)
                     IconButton(
                       onPressed: () => setState(() => _filterDate = null),
-                      icon: const Icon(Icons.refresh, size: 20, color: Colors.grey),
+                      icon: const Icon(Icons.refresh,
+                          size: 20, color: Colors.grey),
                       tooltip: '필터 해제',
                     ),
                   ElevatedButton.icon(
@@ -90,7 +97,8 @@ class _HistoryListViewState extends State<HistoryListView> {
                       final date = await showDatePicker(
                         context: context,
                         initialDate: _filterDate ?? DateTime.now(),
-                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        firstDate:
+                            DateTime.now().subtract(const Duration(days: 365)),
                         lastDate: DateTime.now().add(const Duration(days: 30)),
                       );
                       if (date != null) {
@@ -100,15 +108,20 @@ class _HistoryListViewState extends State<HistoryListView> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF40916C),
-                      side: const BorderSide(color: Color(0xFF40916C), width: 1),
+                      side:
+                          const BorderSide(color: Color(0xFF40916C), width: 1),
                       minimumSize: const Size(100, 36),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.calendar_month, size: 16),
                     label: Text(
-                      _filterDate == null ? '날짜 선택' : DateFormat('MM/dd').format(_filterDate!),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      _filterDate == null
+                          ? '날짜 선택'
+                          : DateFormat('MM/dd').format(_filterDate!),
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -118,10 +131,13 @@ class _HistoryListViewState extends State<HistoryListView> {
         ),
         Expanded(
           child: FutureBuilder<List<Reservation>>(
-            future: DatabaseService().getReservations(itemId: widget.itemId, date: _filterDate),
+            future: DatabaseService()
+                .getReservations(itemId: widget.itemId, date: _filterDate),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
               final reservations = snapshot.data!.reversed.toList();
               if (reservations.isEmpty) {
                 return Center(
@@ -139,28 +155,40 @@ class _HistoryListViewState extends State<HistoryListView> {
               final dates = grouped.keys.toList();
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 itemCount: dates.length,
                 itemBuilder: (context, index) {
                   final date = dates[index];
                   final dailyRes = grouped[date]!;
-                  
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 12, top: 16),
+                        padding:
+                            const EdgeInsets.only(left: 4, bottom: 12, top: 16),
                         child: Row(
                           children: [
-                            Text(date, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF40916C), fontSize: 15)),
+                            Text(date,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF40916C),
+                                    fontSize: 15)),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF40916C).withOpacity(0.1),
+                                color: const Color(0xFF40916C)
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Text('${dailyRes.length}명', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF40916C))),
+                              child: Text('${dailyRes.length}명',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF40916C))),
                             ),
                           ],
                         ),
@@ -174,7 +202,8 @@ class _HistoryListViewState extends State<HistoryListView> {
                         ),
                         child: Column(
                           children: dailyRes.map((res) {
-                            final isLast = dailyRes.indexOf(res) == dailyRes.length - 1;
+                            final isLast =
+                                dailyRes.indexOf(res) == dailyRes.length - 1;
                             return Column(
                               children: [
                                 ListTile(
@@ -182,13 +211,24 @@ class _HistoryListViewState extends State<HistoryListView> {
                                   leading: const CircleAvatar(
                                     radius: 14,
                                     backgroundColor: Color(0xFFF8F9FA),
-                                    child: Icon(Icons.person, size: 16, color: Colors.grey),
+                                    child: Icon(Icons.person,
+                                        size: 16, color: Colors.grey),
                                   ),
-                                  title: Text(res.nickname, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text(res.roomName, style: const TextStyle(fontSize: 11)),
-                                  trailing: Text(DateFormat('HH:mm').format(res.createdAt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  title: Text(res.nickname,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                  subtitle: Text(res.roomName,
+                                      style: const TextStyle(fontSize: 11)),
+                                  trailing: Text(
+                                      DateFormat('HH:mm').format(res.createdAt),
+                                      style: const TextStyle(
+                                          fontSize: 11, color: Colors.grey)),
                                 ),
-                                if (!isLast) Divider(height: 1, indent: 56, color: Colors.grey.shade100),
+                                if (!isLast)
+                                  Divider(
+                                      height: 1,
+                                      indent: 56,
+                                      color: Colors.grey.shade100),
                               ],
                             );
                           }).toList(),
@@ -205,7 +245,8 @@ class _HistoryListViewState extends State<HistoryListView> {
     );
   }
 
-  Map<String, List<Reservation>> _groupReservationsByDate(List<Reservation> res) {
+  Map<String, List<Reservation>> _groupReservationsByDate(
+      List<Reservation> res) {
     final map = <String, List<Reservation>>{};
     for (var r in res) {
       final dateKey = DateFormat('yyyy-MM-dd (E)', 'ko_KR').format(r.createdAt);

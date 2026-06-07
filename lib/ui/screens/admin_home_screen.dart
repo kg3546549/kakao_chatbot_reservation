@@ -290,9 +290,9 @@ class _ReservationTile extends StatelessWidget {
     final date = data['businessDate'] ?? '';
     return Card(
       child: ListTile(
-        leading: Icon(
+        leading: const Icon(
           Icons.person,
-          color: const Color(0xFF40916C),
+          color: Color(0xFF40916C),
         ),
         title: Text(nickname.toString().isEmpty ? '이름 없음' : nickname),
         subtitle: Text(

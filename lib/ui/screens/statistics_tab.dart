@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
-import '../../services/database_service.dart';
 import '../../models/reservation.dart';
 import '../../models/item.dart';
 import '../../providers/bot_provider.dart';
@@ -19,7 +18,7 @@ class StatisticsTab extends StatelessWidget {
           final history = bot.allReservations;
           final vips = _calculateVips(history);
           final todayDist = _calculateTodayDistribution(history, bot.items);
-          
+
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -64,20 +63,27 @@ class StatisticsTab extends StatelessWidget {
                             sideTitles: SideTitles(
                               showTitles: true,
                               getTitlesWidget: (value, meta) {
-                                final date = DateTime.now().subtract(Duration(days: 6 - value.toInt()));
+                                final date = DateTime.now().subtract(
+                                    Duration(days: 6 - value.toInt()));
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
                                     DateFormat('MM/dd').format(date),
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey),
                                   ),
                                 );
                               },
                             ),
                           ),
-                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
                         ),
                         barTouchData: BarTouchData(
                           enabled: true,
@@ -88,7 +94,9 @@ class StatisticsTab extends StatelessWidget {
                             getTooltipItem: (group, groupIndex, rod, rodIndex) {
                               return BarTooltipItem(
                                 rod.toY.toInt().toString(),
-                                const TextStyle(color: Color(0xFF40916C), fontWeight: FontWeight.bold),
+                                const TextStyle(
+                                    color: Color(0xFF40916C),
+                                    fontWeight: FontWeight.bold),
                               );
                             },
                           ),
@@ -102,23 +110,29 @@ class StatisticsTab extends StatelessWidget {
               _buildSectionTitle('가장 많이 온 손님 (VIP)'),
               const SizedBox(height: 16),
               ...vips.take(5).map((vip) => Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                elevation: 0,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  side: BorderSide(color: Colors.grey.shade100),
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF40916C).withOpacity(0.1),
-                    child: Text('${vips.indexOf(vip) + 1}', style: const TextStyle(color: Color(0xFF40916C), fontWeight: FontWeight.bold)),
-                  ),
-                  title: Text(vip.nickname, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('총 ${vip.count}회 방문'),
-                  trailing: const Icon(Icons.stars, color: Color(0xFF968954)),
-                ),
-              )),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    elevation: 0,
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                      side: BorderSide(color: Colors.grey.shade100),
+                    ),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            const Color(0xFF40916C).withValues(alpha: 0.1),
+                        child: Text('${vips.indexOf(vip) + 1}',
+                            style: const TextStyle(
+                                color: Color(0xFF40916C),
+                                fontWeight: FontWeight.bold)),
+                      ),
+                      title: Text(vip.nickname,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('총 ${vip.count}회 방문'),
+                      trailing:
+                          const Icon(Icons.stars, color: Color(0xFF968954)),
+                    ),
+                  )),
               const SizedBox(height: 100),
             ],
           );
@@ -130,7 +144,8 @@ class StatisticsTab extends StatelessWidget {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B4332)),
+      style: const TextStyle(
+          fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B4332)),
     );
   }
 
@@ -141,7 +156,8 @@ class StatisticsTab extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
         padding: const EdgeInsets.all(30.0),
-        child: Center(child: Text(message, style: const TextStyle(color: Colors.grey))),
+        child: Center(
+            child: Text(message, style: const TextStyle(color: Colors.grey))),
       ),
     );
   }
@@ -169,10 +185,11 @@ class StatisticsTab extends StatelessWidget {
     return counts.values.reduce((a, b) => a > b ? a : b).toDouble();
   }
 
-  List<PieChartSectionData> _calculateTodayDistribution(List<Reservation> history, List<Item> items) {
+  List<PieChartSectionData> _calculateTodayDistribution(
+      List<Reservation> history, List<Item> items) {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final counts = <int, int>{};
-    
+
     for (var res in history) {
       if (DateFormat('yyyy-MM-dd').format(res.createdAt) == today) {
         counts[res.itemId] = (counts[res.itemId] ?? 0) + 1;
@@ -182,26 +199,28 @@ class StatisticsTab extends StatelessWidget {
     if (counts.isEmpty) return [];
 
     final colors = [
-      const Color(0xFF40916C), 
-      const Color(0xFF52B788), 
-      const Color(0xFF74C69D), 
-      const Color(0xFF95D5B2), 
+      const Color(0xFF40916C),
+      const Color(0xFF52B788),
+      const Color(0xFF74C69D),
+      const Color(0xFF95D5B2),
       const Color(0xFFB7E4C7),
       const Color(0xFFD8F3DC),
     ];
     int colorIdx = 0;
 
     return counts.entries.map((e) {
-      final item = items.firstWhere((i) => i.id == e.key, orElse: () => Item(name: '알 수 없음'));
+      final item = items.firstWhere((i) => i.id == e.key,
+          orElse: () => Item(name: '알 수 없음'));
       final color = colors[colorIdx % colors.length];
       colorIdx++;
-      
+
       return PieChartSectionData(
         color: color,
         value: e.value.toDouble(),
         title: '${item.name}\n${e.value}명',
         radius: 60,
-        titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+        titleStyle: const TextStyle(
+            fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
       );
     }).toList();
   }

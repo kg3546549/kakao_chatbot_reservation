@@ -13,8 +13,10 @@ class LogViewerScreen extends StatelessWidget {
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: DatabaseService().getLogs(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
           final logs = snapshot.data!;
           if (logs.isEmpty) {
             return Center(
@@ -23,7 +25,8 @@ class LogViewerScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.list_alt, size: 60, color: Colors.grey.shade300),
                   const SizedBox(height: 16),
-                  const Text('로그 기록이 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('로그 기록이 없습니다.',
+                      style: TextStyle(color: Colors.grey)),
                 ],
               ),
             );
@@ -36,8 +39,10 @@ class LogViewerScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final log = logs[index];
               final type = log['type'];
-              final color = type == '오류' ? Colors.red : (type == '성공' ? const Color(0xFF40916C) : Colors.blue);
-              
+              final color = type == '오류'
+                  ? Colors.red
+                  : (type == '성공' ? const Color(0xFF40916C) : Colors.blue);
+
               return Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -48,14 +53,17 @@ class LogViewerScreen extends StatelessWidget {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.circle, color: color, size: 10),
                   ),
-                  title: Text(log['content'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  title: Text(log['content'] ?? '',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500)),
                   subtitle: Text(
-                    DateFormat('MM/dd HH:mm:ss').format(DateTime.parse(log['timestamp'])),
+                    DateFormat('MM/dd HH:mm:ss')
+                        .format(DateTime.parse(log['timestamp'])),
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                 ),

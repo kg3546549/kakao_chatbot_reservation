@@ -36,7 +36,7 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -51,18 +51,23 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF643921).withOpacity(0.05),
+                    color: const Color(0xFF643921).withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF643921).withOpacity(0.1)),
+                    border: Border.all(
+                        color: const Color(0xFF643921).withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: theme.colorScheme.primary, size: 20),
+                      Icon(Icons.info_outline,
+                          color: theme.colorScheme.primary, size: 20),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
                           '카카오톡에서 사용할 단어를 설정하세요.\n설정한 단어 앞에 /[항목명]을 붙여서 사용합니다.',
-                          style: TextStyle(color: Color(0xFF643921), fontSize: 13, height: 1.5),
+                          style: TextStyle(
+                              color: Color(0xFF643921),
+                              fontSize: 13,
+                              height: 1.5),
                         ),
                       ),
                     ],
@@ -76,9 +81,14 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Row(
                     children: [
-                      Text('관리자 전용 명령어', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF968954))),
+                      Text('관리자 전용 명령어',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF968954))),
                       SizedBox(width: 8),
-                      Expanded(child: Divider(color: Color(0xFF968954), thickness: 0.5)),
+                      Expanded(
+                          child: Divider(
+                              color: Color(0xFF968954), thickness: 0.5)),
                     ],
                   ),
                 ),
@@ -98,7 +108,7 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -5),
                 ),
@@ -110,28 +120,30 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
               child: ElevatedButton(
                 onPressed: () async {
                   await context.read<BotProvider>().updateCommands(
-                    reserve: _controllers['reserve']!.text,
-                    cancel: _controllers['cancel']!.text,
-                    status: _controllers['status']!.text,
-                    reset: _controllers['reset']!.text,
-                    max: _controllers['max']!.text,
-                    template: _controllers['template']!.text,
-                    total: _controllers['total']!.text,
+                        reserve: _controllers['reserve']!.text,
+                        cancel: _controllers['cancel']!.text,
+                        status: _controllers['status']!.text,
+                        reset: _controllers['reset']!.text,
+                        max: _controllers['max']!.text,
+                        template: _controllers['template']!.text,
+                        total: _controllers['total']!.text,
+                      );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('명령어 설정이 저장되었습니다.')),
                   );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('명령어 설정이 저장되었습니다.')),
-                    );
-                    Navigator.pop(context);
-                  }
+                  Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF643921),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
-                child: const Text('명령어 설정 저장하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text('명령어 설정 저장하기',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ),
@@ -148,7 +160,8 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
         cursorColor: const Color(0xFF643921),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Color(0xFF643921), fontWeight: FontWeight.w500),
+          labelStyle: const TextStyle(
+              color: Color(0xFF643921), fontWeight: FontWeight.w500),
           hintText: hint,
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
           filled: true,
@@ -166,7 +179,8 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
             borderSide: const BorderSide(color: Color(0xFF643921), width: 1.5),
           ),
           prefixText: key == 'total' ? '/' : '/[항목] ',
-          prefixStyle: const TextStyle(color: Color(0xFF968954), fontWeight: FontWeight.bold),
+          prefixStyle: const TextStyle(
+              color: Color(0xFF968954), fontWeight: FontWeight.bold),
         ),
       ),
     );

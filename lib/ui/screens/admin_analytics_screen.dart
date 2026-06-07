@@ -33,11 +33,11 @@ class AdminAnalyticsScreen extends StatelessWidget {
           final docs = snapshot.data!.docs;
           final created = docs.fold<int>(
             0,
-            (sum, doc) => sum + _int(doc.data()['createdCount']),
+            (total, doc) => total + _int(doc.data()['createdCount']),
           );
           final cancelled = docs.fold<int>(
             0,
-            (sum, doc) => sum + _int(doc.data()['cancelledCount']),
+            (total, doc) => total + _int(doc.data()['cancelledCount']),
           );
 
           return ListView(

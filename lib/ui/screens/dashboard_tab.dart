@@ -54,7 +54,8 @@ class _DashboardTabState extends State<DashboardTab> {
                   final date = await showDatePicker(
                     context: context,
                     initialDate: _selectedDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    firstDate:
+                        DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
                   if (date != null) {
@@ -70,7 +71,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 0.03),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -81,23 +82,29 @@ class _DashboardTabState extends State<DashboardTab> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF40916C).withOpacity(0.1),
+                          color: const Color(0xFF40916C).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.calendar_today, color: Color(0xFF40916C), size: 20),
+                        child: const Icon(Icons.calendar_today,
+                            color: Color(0xFF40916C), size: 20),
                       ),
                       const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('예약 날짜 선택', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          const Text('예약 날짜 선택',
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 12)),
                           Text(
-                            DateFormat('yyyy년 MM월 dd일 (E)', 'ko_KR').format(_selectedDate),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            DateFormat('yyyy년 MM월 dd일 (E)', 'ko_KR')
+                                .format(_selectedDate),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           Text(
                             '카톡 기준일 전환: 매일 ${bot.resetTimeLabel}',
-                            style: const TextStyle(color: Colors.grey, fontSize: 11),
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 11),
                           ),
                         ],
                       ),
@@ -108,7 +115,7 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               if (bot.networkStatus != "연결됨")
                 _buildAlertCard(
                   context,
@@ -140,26 +147,31 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 10),
-                child: Text('진행 중인 예약', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B4332))),
+                child: Text('진행 중인 예약',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B4332))),
               ),
-              
+
               if (bot.items.isEmpty)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(40.0),
                     child: Column(
                       children: [
-                        Icon(Icons.add_circle_outline, size: 60, color: Colors.grey.shade300),
+                        Icon(Icons.add_circle_outline,
+                            size: 60, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
-                        const Text('등록된 항목이 없습니다.\n[항목 설정]에서 추가해주세요.', 
-                          textAlign: TextAlign.center, 
-                          style: TextStyle(color: Colors.grey)
-                        ),
+                        const Text('등록된 항목이 없습니다.\n[항목 설정]에서 추가해주세요.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   ),
                 ),
-              ...bot.items.map((item) => ItemStatusCard(item: item, selectedDate: _selectedDate)),
+              ...bot.items.map((item) =>
+                  ItemStatusCard(item: item, selectedDate: _selectedDate)),
               const SizedBox(height: 100),
             ],
           );
@@ -168,10 +180,11 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildAlertCard(BuildContext context, {
-    required IconData icon, 
-    required String title, 
-    required String subtitle, 
+  Widget _buildAlertCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
     required Color color,
     String? actionLabel,
     VoidCallback? onAction,
@@ -179,19 +192,27 @@ class _DashboardTabState extends State<DashboardTab> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
-      color: color.withOpacity(0.05),
+      color: color.withValues(alpha: 0.05),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: color.withOpacity(0.1)),
+        side: BorderSide(color: color.withValues(alpha: 0.1)),
       ),
       child: ListTile(
         leading: Icon(icon, color: color),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)),
-        subtitle: Text(subtitle, style: TextStyle(color: color.withOpacity(0.8), fontSize: 12)),
-        trailing: onAction != null ? TextButton(
-          onPressed: onAction,
-          child: Text(actionLabel!, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-        ) : null,
+        title: Text(title,
+            style: TextStyle(
+                fontWeight: FontWeight.bold, color: color, fontSize: 14)),
+        subtitle: Text(subtitle,
+            style:
+                TextStyle(color: color.withValues(alpha: 0.8), fontSize: 12)),
+        trailing: onAction != null
+            ? TextButton(
+                onPressed: onAction,
+                child: Text(actionLabel!,
+                    style:
+                        TextStyle(color: color, fontWeight: FontWeight.bold)),
+              )
+            : null,
       ),
     );
   }
@@ -206,17 +227,19 @@ class _DashboardTabState extends State<DashboardTab> {
 class ItemStatusCard extends StatelessWidget {
   final Item item;
   final DateTime selectedDate;
-  const ItemStatusCard({super.key, required this.item, required this.selectedDate});
+  const ItemStatusCard(
+      {super.key, required this.item, required this.selectedDate});
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: DatabaseService().getReservations(itemId: item.id!, date: selectedDate),
+      future: DatabaseService()
+          .getReservations(itemId: item.id!, date: selectedDate),
       builder: (context, snapshot) {
         final count = snapshot.data?.length ?? 0;
         final percent = item.maxCapacity > 0 ? count / item.maxCapacity : 0;
         final isFull = percent >= 1.0;
-        
+
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
@@ -224,7 +247,7 @@ class ItemStatusCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
@@ -242,7 +265,8 @@ class ItemStatusCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: (isFull ? Colors.red : const Color(0xFF40916C)).withOpacity(0.1),
+                      color: (isFull ? Colors.red : const Color(0xFF40916C))
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Center(
@@ -261,14 +285,19 @@ class ItemStatusCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF1B4332))),
+                        Text(item.name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                color: Color(0xFF1B4332))),
                         const SizedBox(height: 4),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: percent.toDouble(),
                             backgroundColor: Colors.grey.shade100,
-                            color: isFull ? Colors.red : const Color(0xFF40916C),
+                            color:
+                                isFull ? Colors.red : const Color(0xFF40916C),
                             minHeight: 6,
                           ),
                         ),
@@ -280,7 +309,8 @@ class ItemStatusCard extends StatelessWidget {
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('정원 ${item.maxCapacity}명', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text('정원 ${item.maxCapacity}명',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   const Icon(Icons.keyboard_arrow_down, size: 20),
                 ],
               ),
@@ -289,32 +319,46 @@ class ItemStatusCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
-                      children: snapshot.data!.map((res) => ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                        dense: true,
-                        leading: CircleAvatar(
-                          radius: 12,
-                          backgroundColor: const Color(0xFF40916C).withOpacity(0.1),
-                          child: Text('${snapshot.data!.indexOf(res) + 1}', style: const TextStyle(fontSize: 10, color: Color(0xFF40916C))),
-                        ),
-                        title: Text(res.nickname, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        subtitle: Text(res.roomName, style: const TextStyle(fontSize: 11)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.red),
-                          onPressed: () async {
-                            await DatabaseService().deleteReservation(res.id!);
-                            context.read<BotProvider>().refresh();
-                          },
-                        ),
-                      )).toList(),
+                      children: snapshot.data!
+                          .map((res) => ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                dense: true,
+                                leading: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: const Color(0xFF40916C)
+                                      .withValues(alpha: 0.1),
+                                  child: Text(
+                                      '${snapshot.data!.indexOf(res) + 1}',
+                                      style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFF40916C))),
+                                ),
+                                title: Text(res.nickname,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500)),
+                                subtitle: Text(res.roomName,
+                                    style: const TextStyle(fontSize: 11)),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline,
+                                      size: 18, color: Colors.red),
+                                  onPressed: () async {
+                                    await DatabaseService()
+                                        .deleteReservation(res.id!);
+                                    if (!context.mounted) return;
+                                    context.read<BotProvider>().refresh();
+                                  },
+                                ),
+                              ))
+                          .toList(),
                     ),
                   )
                 else
                   const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text('예약자가 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    child: Text('예약자가 없습니다.',
+                        style: TextStyle(color: Colors.grey, fontSize: 13)),
                   ),
-                
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                   child: Row(
@@ -324,9 +368,11 @@ class ItemStatusCard extends StatelessWidget {
                           onPressed: () => _showManualAddDialog(context, item),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF40916C),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text('수동 추가', style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: const Text('수동 추가',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -336,7 +382,8 @@ class ItemStatusCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
-                          onPressed: () => _showResetConfirmDialog(context, item),
+                          onPressed: () =>
+                              _showResetConfirmDialog(context, item),
                           icon: const Icon(Icons.refresh, color: Colors.red),
                           tooltip: '초기화',
                         ),
@@ -391,7 +438,8 @@ class ItemStatusCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
-              await DatabaseService().clearReservations(item.id!, date: selectedDate);
+              await DatabaseService()
+                  .clearReservations(item.id!, date: selectedDate);
               if (context.mounted) {
                 context.read<BotProvider>().refresh();
                 Navigator.pop(context);
@@ -400,7 +448,9 @@ class ItemStatusCard extends StatelessWidget {
                 );
               }
             },
-            child: const Text('날짜 초기화', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('날짜 초기화',
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -418,7 +468,8 @@ class ItemStatusCard extends StatelessWidget {
           decoration: const InputDecoration(labelText: '닉네임'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('취소')),
           TextButton(
             onPressed: () async {
               if (nickController.text.isNotEmpty) {
