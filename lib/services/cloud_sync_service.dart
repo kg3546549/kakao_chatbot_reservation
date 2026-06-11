@@ -139,8 +139,14 @@ class CloudSyncService {
   }
 
   Future<void> _publishExistingData() async {
+    final activeTenantId = _tenantId;
+    if (activeTenantId == null) return;
+
     final items = await _database.getItems();
+    if (_tenantId != activeTenantId) return;
+
     for (final item in items) {
+      if (_tenantId != activeTenantId) return;
       await publishItem(item);
     }
     final itemsById = {
@@ -148,7 +154,10 @@ class CloudSyncService {
         if (item.id != null) item.id!: item,
     };
     final reservations = await _database.getReservations();
+    if (_tenantId != activeTenantId) return;
+
     for (final reservation in reservations) {
+      if (_tenantId != activeTenantId) return;
       final item = itemsById[reservation.itemId];
       if (item == null) continue;
       await _publish(
@@ -167,16 +176,19 @@ class CloudSyncService {
   Future<void> _restoreIfEmpty() async {
     final tenantId = _tenantId;
     final deviceId = _deviceId;
-    if (tenantId == null ||
-        deviceId == null ||
-        await _database.hasLocalItems()) {
-      return;
-    }
+    if (tenantId == null || deviceId == null) return;
+
+    final hasItems = await _database.hasLocalItems();
+    if (_tenantId != tenantId) return;
+    if (hasItems) return;
+
     try {
       final result = await _functions.httpsCallable('getBotSnapshot').call({
         'tenantId': tenantId,
         'deviceId': deviceId,
       });
+      if (_tenantId != tenantId) return;
+
       final data = Map<String, dynamic>.from(result.data as Map);
       final items = (data['items'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
@@ -190,6 +202,8 @@ class CloudSyncService {
       await _restorePreferences(
         Map<String, dynamic>.from(data['settings'] as Map? ?? const {}),
       );
+      if (_tenantId != tenantId) return;
+
       await _database.restoreBotSnapshot(
         items: items,
         reservations: reservations,
@@ -209,8 +223,13 @@ class CloudSyncService {
     final tenantId = _tenantId;
     final deviceId = _deviceId;
     if (tenantId == null || deviceId == null) return;
+    
     final prefs = await SharedPreferences.getInstance();
+    if (_tenantId != tenantId) return;
+
     final rooms = await _database.getRooms();
+    if (_tenantId != tenantId) return;
+
     try {
       await _functions.httpsCallable('updateBotSettings').call({
         'tenantId': tenantId,
@@ -306,19 +325,27 @@ class CloudSyncService {
   }
 
   Future<void> flushPendingEvents() async {
-    if (_flushing || _tenantId == null) return;
+    final activeTenantId = _tenantId;
+    if (_flushing || activeTenantId == null) return;
     _flushing = true;
     try {
       final events = await _database.getPendingSyncEvents();
       for (final row in events) {
+        if (_tenantId != activeTenantId) break;
+
         final eventId = row['event_id'] as String;
         try {
           final payload = jsonDecode(row['payload'] as String);
           await _functions
               .httpsCallable('createReservationEvent')
               .call(payload);
+
+          if (_tenantId != activeTenantId) break;
+
           await _database.markSyncEventCompleted(eventId);
         } catch (error, stack) {
+          if (_tenantId != activeTenantId) break;
+
           debugPrint('Reservation cloud sync failed: $error');
           await _database.markSyncEventFailed(eventId, error);
           await FirebaseCrashlytics.instance.recordError(

@@ -233,7 +233,11 @@ class TenantSelectionScreen extends StatelessWidget {
     );
     controller.dispose();
     if (name != null && name.trim().isNotEmpty && context.mounted) {
-      await context.read<SessionProvider>().createTenant(name);
+      Future.microtask(() async {
+        if (context.mounted) {
+          await context.read<SessionProvider>().createTenant(name);
+        }
+      });
     }
   }
 
@@ -262,7 +266,11 @@ class TenantSelectionScreen extends StatelessWidget {
     );
     controller.dispose();
     if (inviteId != null && inviteId.trim().isNotEmpty && context.mounted) {
-      await context.read<SessionProvider>().acceptTenantInvite(inviteId);
+      Future.microtask(() async {
+        if (context.mounted) {
+          await context.read<SessionProvider>().acceptTenantInvite(inviteId);
+        }
+      });
     }
   }
 }

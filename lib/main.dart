@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'providers/bot_provider.dart';
 import 'providers/session_provider.dart';
+import 'models/tenant.dart';
 import 'services/push_notification_service.dart';
 import 'ui/screens/auth_gate.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -43,9 +44,56 @@ void main() async {
     );
   }
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  PushNotificationService.instance.onNotificationTap = (_) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      navigatorKey.currentState?.popUntil((route) => route.isFirst);
+  PushNotificationService.instance.onNotificationTap = (data) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final context = navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+
+      final session = Provider.of<SessionProvider>(context, listen: false);
+      if (session.user == null) return;
+
+      final tenantId = data['tenantId']?.toString();
+      if (tenantId == null || tenantId.isEmpty) {
+        navigatorKey.currentState?.popUntil((route) => route.isFirst);
+        return;
+      }
+
+      TenantMembership? targetTenant;
+      for (final t in session.tenants) {
+        if (t.tenantId == tenantId) {
+          targetTenant = t;
+          break;
+        }
+      }
+
+      if (targetTenant != null) {
+        if (session.selectedTenant?.tenantId != tenantId ||
+            session.mode != AppMode.admin) {
+          await session.selectTenant(targetTenant);
+          await session.selectMode(AppMode.admin);
+        }
+        navigatorKey.currentState?.popUntil((route) => route.isFirst);
+
+        final type = data['type']?.toString();
+        final nickname = data['nickname']?.toString();
+        final itemName = data['itemName']?.toString();
+        if (nickname != null && type != null) {
+          final actionText = type == 'reservation_created' ? '등록' : '취소/변경';
+          final message = '🔔 [$nickname]님의 예약이 $actionText되었습니다. (${itemName ?? ""})';
+          
+          final scaffoldContext = navigatorKey.currentContext;
+          if (scaffoldContext != null && scaffoldContext.mounted) {
+            ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      } else {
+        navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      }
     });
   };
   await PushNotificationService.instance.initialize();
