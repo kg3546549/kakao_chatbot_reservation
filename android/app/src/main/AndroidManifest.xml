@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="카카오톡 예약 관리"
+        android:label="모두예약"
         android:name=".App"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -32,7 +32,7 @@
         </activity>
 
         <service android:name=".NotificationService"
-            android:label="Kakao Bot Listener"
+            android:label="모두예약 알림 리스너"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:foregroundServiceType="remoteMessaging"
             android:exported="true">

@@ -106,7 +106,7 @@ class _HistoryListViewState extends State<HistoryListView> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
+                      backgroundColor: const Color(0xFFFEFEFE),
                       foregroundColor: const Color(0xFF40916C),
                       side:
                           const BorderSide(color: Color(0xFF40916C), width: 1),
@@ -210,7 +210,7 @@ class _HistoryListViewState extends State<HistoryListView> {
                                   dense: true,
                                   leading: const CircleAvatar(
                                     radius: 14,
-                                    backgroundColor: Color(0xFFF8F9FA),
+                                    backgroundColor: Color(0xFFFEFEFE),
                                     child: Icon(Icons.person,
                                         size: 16, color: Colors.grey),
                                   ),

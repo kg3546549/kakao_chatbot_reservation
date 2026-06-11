@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Image.asset('assets/logo.png', height: 100),
                   const SizedBox(height: 24),
                   const Text(
-                    '카카오톡 예약 관리',
+                    '모두예약',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),

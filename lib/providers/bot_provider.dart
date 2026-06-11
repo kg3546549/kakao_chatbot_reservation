@@ -395,8 +395,8 @@ class BotProvider with ChangeNotifier {
     } else if (commandText == cmdTemplate) {
       if (room.type != RoomType.admin) return;
 
-      // 명령어 이후의 모든 텍스트를 추출 (줄바꿈 포함)
-      // '/메인 텍스트변경 [내용]' 구조에서 [내용] 부분 전체 추출
+      // 명령어 이후의 모든 텍스트를 추출한다.
+      // '/항목명 텍스트변경 [내용]' 구조에서 [내용] 부분 전체 추출
       final firstSpace = message.indexOf(' ');
       if (firstSpace == -1) return;
       final secondSpace = message.indexOf(' ', firstSpace + 1);

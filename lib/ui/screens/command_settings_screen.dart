@@ -38,7 +38,7 @@ class _CommandSettingsScreenState extends State<CommandSettingsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFFEFEFE),
       appBar: AppBar(
         title: const Text('명령어 단어 설정'),
       ),

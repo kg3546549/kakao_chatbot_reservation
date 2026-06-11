@@ -188,7 +188,7 @@ class SettingsTab extends StatelessWidget {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F9FA),
+          color: const Color(0xFFFEFEFE),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButton<RoomType>(

@@ -8,7 +8,7 @@ class LogViewerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFFEFEFE),
       appBar: AppBar(title: const Text('시스템 로그')),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: DatabaseService().getLogs(),

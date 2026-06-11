@@ -132,7 +132,7 @@ class TemplatesTab extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FA),
+                          color: const Color(0xFFFEFEFE),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.grey.shade100),
                         ),
@@ -326,7 +326,7 @@ class TemplatesTab extends StatelessWidget {
             TextField(
               controller: nameController,
               decoration: const InputDecoration(
-                  labelText: '항목명 (예: 메인, 무토)',
+                  labelText: '항목명 (예: 오전반, 저녁반)',
                   labelStyle: TextStyle(fontSize: 13)),
             ),
             const SizedBox(height: 12),

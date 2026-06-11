@@ -68,7 +68,7 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   image_path: "logo.png"
-  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_background: "#FEFEFE"
   adaptive_icon_foreground: "logo.png"
 
 # For information on the generic Dart part of this file, see the

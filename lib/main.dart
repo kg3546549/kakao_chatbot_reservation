@@ -125,7 +125,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: '카카오톡 예약 관리',
+      title: '모두예약',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -133,11 +133,11 @@ class MyApp extends StatelessWidget {
           seedColor: const Color(0xFF40916C),
           primary: const Color(0xFF40916C),
           secondary: const Color(0xFF2D6A4F),
-          surface: const Color(0xFFF8F9FA),
+          surface: const Color(0xFFFEFEFE),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        scaffoldBackgroundColor: const Color(0xFFFEFEFE),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF8F9FA),
+          backgroundColor: Color(0xFFFEFEFE),
           foregroundColor: Color(0xFF1B4332),
           elevation: 0,
           centerTitle: true,
@@ -165,7 +165,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
         navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFFFEFEFE),
           indicatorColor: const Color(0xFF40916C).withValues(alpha: 0.1),
           labelTextStyle: WidgetStateProperty.all(
             const TextStyle(

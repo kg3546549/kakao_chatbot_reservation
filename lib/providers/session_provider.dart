@@ -83,15 +83,29 @@ class SessionProvider with ChangeNotifier {
         .snapshots()
         .listen((snapshot) async {
       final activeTenants = <TenantMembership>[];
+      String? tenantLoadWarning;
       for (final membership in snapshot.docs) {
-        final tenantId = membership.data()['tenantId'] ?? membership.id;
-        final tenant =
-            await _firestore.collection('tenants').doc(tenantId).get();
-        if (tenant.data()?['status'] == 'active') {
-          activeTenants.add(TenantMembership.fromMap(membership.data()));
+        final membershipData = membership.data();
+        final tenantId = (membershipData['tenantId'] ?? membership.id).toString();
+        try {
+          final tenant = await _firestore.collection('tenants').doc(tenantId).get();
+          if (tenant.data()?['status'] == 'active') {
+            activeTenants.add(
+              TenantMembership.fromMap({
+                ...membershipData,
+                'tenantId': tenantId,
+                'tenantName':
+                    membershipData['tenantName'] ?? tenant.data()?['name'],
+              }),
+            );
+          }
+        } on FirebaseException catch (error) {
+          debugPrint('Skipping inaccessible tenant $tenantId: $error');
+          tenantLoadWarning = '접근 권한이 없는 가게가 있어 목록에서 제외했습니다.';
         }
       }
       tenants = activeTenants;
+      errorMessage = tenantLoadWarning;
       await _restoreLastSession();
       initializing = false;
       notifyListeners();
