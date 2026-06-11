@@ -69,6 +69,8 @@ class AdminHistoryScreen extends StatelessWidget {
         return '$nickname 예약 등록 · $itemName';
       case 'cancelled':
         return '$nickname 예약 취소 · $itemName';
+      case 'updated':
+        return '$nickname 예약 수정 · $itemName';
       case 'reset':
         return '$itemName 예약 초기화';
       default:
@@ -87,6 +89,7 @@ class _EventIcon extends StatelessWidget {
     return switch (type) {
       'created' => const Icon(Icons.add_circle, color: Color(0xFF40916C)),
       'cancelled' => const Icon(Icons.cancel, color: Colors.orange),
+      'updated' => const Icon(Icons.edit, color: Colors.blue),
       'reset' => const Icon(Icons.restart_alt, color: Colors.red),
       _ => const Icon(Icons.history),
     };

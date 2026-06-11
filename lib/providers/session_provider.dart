@@ -103,6 +103,11 @@ class SessionProvider with ChangeNotifier {
   }
 
   Future<void> signIn(String email, String password) async {
+    final validationError = _validateCredentials(email, password);
+    if (validationError != null) {
+      _setError(validationError);
+      return;
+    }
     await _run(() => _auth.signInWithEmailAndPassword(
           email: email.trim(),
           password: password,
@@ -110,6 +115,11 @@ class SessionProvider with ChangeNotifier {
   }
 
   Future<void> register(String email, String password) async {
+    final validationError = _validateCredentials(email, password);
+    if (validationError != null) {
+      _setError(validationError);
+      return;
+    }
     await _run(() => _auth.createUserWithEmailAndPassword(
           email: email.trim(),
           password: password,
@@ -187,9 +197,10 @@ class SessionProvider with ChangeNotifier {
         await _setNativeBotMode(false);
         rethrow;
       }
-      CloudSyncService.instance.configure(
+      await CloudSyncService.instance.configure(
         tenantId: tenant.tenantId,
         deviceId: deviceId,
+        botMode: nextMode == AppMode.bot,
       );
       await _setNativeBotMode(nextMode == AppMode.bot);
       if (nextMode == AppMode.bot) {
@@ -212,6 +223,7 @@ class SessionProvider with ChangeNotifier {
   }
 
   Future<void> createAdminReservation({
+    required String itemId,
     required String itemName,
     required String nickname,
     required String roomName,
@@ -226,7 +238,7 @@ class SessionProvider with ChangeNotifier {
         'eventId': 'event-$id',
         'reservationId': 'admin-$id',
         'type': 'created',
-        'itemId': itemName.trim(),
+        'itemId': itemId,
         'itemName': itemName.trim(),
         'nickname': nickname.trim(),
         'roomName': roomName.trim(),
@@ -259,6 +271,34 @@ class SessionProvider with ChangeNotifier {
     });
   }
 
+  Future<void> updateAdminReservation({
+    required Map<String, dynamic> reservation,
+    required String itemId,
+    required String itemName,
+    required String nickname,
+    required String roomName,
+  }) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return;
+    final reservationId = (reservation['reservationId'] ?? '').toString();
+    if (reservationId.isEmpty) return;
+    await _run(() async {
+      await _functions.httpsCallable('createReservationEvent').call({
+        'tenantId': tenant.tenantId,
+        'eventId':
+            'event-update-${user!.uid}-${DateTime.now().microsecondsSinceEpoch}',
+        'reservationId': reservationId,
+        'type': 'updated',
+        'itemId': itemId,
+        'itemName': itemName,
+        'nickname': nickname.trim(),
+        'roomName': roomName.trim(),
+        'businessDate': (reservation['businessDate'] ?? '').toString(),
+        'sourceDeviceId': 'admin',
+      });
+    });
+  }
+
   Future<void> addTenantMember({
     required String email,
     required String role,
@@ -270,6 +310,66 @@ class SessionProvider with ChangeNotifier {
         'tenantId': tenant.tenantId,
         'email': email.trim(),
         'role': role,
+      });
+    });
+  }
+
+  Future<String?> createTenantInvite({
+    required String email,
+    required String role,
+  }) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return null;
+    busy = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final result = await _functions.httpsCallable('createTenantInvite').call({
+        'tenantId': tenant.tenantId,
+        'email': email.trim(),
+        'role': role,
+      });
+      return Map<String, dynamic>.from(result.data as Map)['inviteId']
+          ?.toString();
+    } on FirebaseFunctionsException catch (error) {
+      errorMessage = error.message ?? '초대 생성에 실패했습니다.';
+      return null;
+    } catch (error) {
+      errorMessage = error.toString();
+      return null;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> acceptTenantInvite(String inviteId) async {
+    await _run(() async {
+      await _functions
+          .httpsCallable('acceptTenantInvite')
+          .call({'inviteId': inviteId.trim()});
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> listTenantInvites() async {
+    final tenant = selectedTenant;
+    if (tenant == null) return [];
+    final result = await _functions
+        .httpsCallable('listTenantInvites')
+        .call({'tenantId': tenant.tenantId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return (data['invites'] as List? ?? const [])
+        .map((invite) => Map<String, dynamic>.from(invite as Map))
+        .toList();
+  }
+
+  Future<void> revokeTenantInvite(String inviteId) async {
+    final tenant = selectedTenant;
+    if (tenant == null) return;
+    await _run(() async {
+      await _functions.httpsCallable('revokeTenantInvite').call({
+        'tenantId': tenant.tenantId,
+        'inviteId': inviteId,
       });
     });
   }
@@ -369,9 +469,10 @@ class SessionProvider with ChangeNotifier {
         await _setNativeBotMode(false);
         return;
       }
-      CloudSyncService.instance.configure(
+      await CloudSyncService.instance.configure(
         tenantId: tenant.tenantId,
         deviceId: deviceId,
+        botMode: restoredMode == AppMode.bot,
       );
       await _setNativeBotMode(restoredMode == AppMode.bot);
       if (restoredMode == AppMode.bot) {
@@ -457,15 +558,54 @@ class SessionProvider with ChangeNotifier {
     try {
       await action();
     } on FirebaseAuthException catch (error) {
-      errorMessage = error.message ?? '로그인 처리에 실패했습니다.';
+      errorMessage = _firebaseAuthMessage(error);
     } on FirebaseFunctionsException catch (error) {
       errorMessage = error.message ?? '서버 요청에 실패했습니다.';
+    } on PlatformException catch (error) {
+      errorMessage = error.message ?? '요청을 처리하지 못했습니다.';
     } catch (error) {
-      errorMessage = error.toString();
+      errorMessage = '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.';
     } finally {
       busy = false;
       notifyListeners();
     }
+  }
+
+  String _firebaseAuthMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'invalid-email':
+        return '올바른 이메일 주소를 입력하세요.';
+      case 'weak-password':
+        return '더 안전한 비밀번호를 입력하세요.';
+      case 'email-already-in-use':
+        return '이미 가입된 이메일입니다.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return '이메일 또는 비밀번호가 올바르지 않습니다.';
+      case 'network-request-failed':
+        return '네트워크 연결을 확인하세요.';
+      default:
+        if ((error.message ?? '')
+            .contains('Firebase App Check Token is invalid')) {
+          return '앱 인증 정보를 갱신하지 못했습니다. 앱을 다시 실행해 주세요.';
+        }
+        return '로그인 처리에 실패했습니다.';
+    }
+  }
+
+  String? _validateCredentials(String email, String password) {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) return '이메일을 입력하세요.';
+    if (!normalizedEmail.contains('@')) return '올바른 이메일 주소를 입력하세요.';
+    if (password.isEmpty) return '비밀번호를 입력하세요.';
+    if (password.length < 6) return '비밀번호는 6자 이상 입력하세요.';
+    return null;
+  }
+
+  void _setError(String message) {
+    errorMessage = message;
+    notifyListeners();
   }
 
   @override

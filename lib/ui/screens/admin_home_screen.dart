@@ -144,6 +144,9 @@ class AdminHomeScreen extends StatelessWidget {
               for (final doc in docs)
                 _ReservationTile(
                   data: doc.data(),
+                  onEdit: session.busy || !canManage
+                      ? null
+                      : () => _showEditDialog(context, session, doc.data()),
                   onCancel: session.busy || !canManage
                       ? null
                       : () => _confirmCancel(context, session, doc.data()),
@@ -166,52 +169,80 @@ class AdminHomeScreen extends StatelessWidget {
     BuildContext context,
     SessionProvider session,
   ) async {
-    final itemController = TextEditingController();
+    final tenantId = session.selectedTenant!.tenantId;
+    final itemSnapshot = await FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(tenantId)
+        .collection('items')
+        .orderBy('name')
+        .get();
+    if (!context.mounted) return;
+    if (itemSnapshot.docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('먼저 예약 항목을 등록하세요.')),
+      );
+      return;
+    }
+    var selectedItem = itemSnapshot.docs.first;
     final nicknameController = TextEditingController();
     final roomController = TextEditingController(text: '관리자 직접 등록');
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('예약 추가'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: itemController,
-              decoration: const InputDecoration(labelText: '예약 항목'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('예약 추가'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: selectedItem.id,
+                decoration: const InputDecoration(labelText: '예약 항목'),
+                items: [
+                  for (final item in itemSnapshot.docs)
+                    DropdownMenuItem(
+                      value: item.id,
+                      child: Text(item.data()['name'] ?? item.id),
+                    ),
+                ],
+                onChanged: (itemId) {
+                  if (itemId == null) return;
+                  setState(() {
+                    selectedItem = itemSnapshot.docs
+                        .firstWhere((item) => item.id == itemId);
+                  });
+                },
+              ),
+              TextField(
+                controller: nicknameController,
+                decoration: const InputDecoration(labelText: '예약자 이름'),
+              ),
+              TextField(
+                controller: roomController,
+                decoration: const InputDecoration(labelText: '등록 경로'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
             ),
-            TextField(
-              controller: nicknameController,
-              decoration: const InputDecoration(labelText: '예약자 이름'),
-            ),
-            TextField(
-              controller: roomController,
-              decoration: const InputDecoration(labelText: '등록 경로'),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('추가'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('추가'),
-          ),
-        ],
       ),
     );
-    if (result == true &&
-        itemController.text.trim().isNotEmpty &&
-        nicknameController.text.trim().isNotEmpty) {
+    if (result == true && nicknameController.text.trim().isNotEmpty) {
       await session.createAdminReservation(
-        itemName: itemController.text,
+        itemId: selectedItem.id,
+        itemName: selectedItem.data()['name'] ?? selectedItem.id,
         nickname: nicknameController.text,
         roomName: roomController.text,
       );
     }
-    itemController.dispose();
     nicknameController.dispose();
     roomController.dispose();
   }
@@ -241,6 +272,89 @@ class AdminHomeScreen extends StatelessWidget {
     if (confirmed == true) {
       await session.cancelAdminReservation(reservation);
     }
+  }
+
+  Future<void> _showEditDialog(
+    BuildContext context,
+    SessionProvider session,
+    Map<String, dynamic> reservation,
+  ) async {
+    final itemSnapshot = await FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(session.selectedTenant!.tenantId)
+        .collection('items')
+        .orderBy('name')
+        .get();
+    if (!context.mounted || itemSnapshot.docs.isEmpty) return;
+
+    var selectedItem = itemSnapshot.docs.firstWhere(
+      (item) => item.id == reservation['itemId'],
+      orElse: () => itemSnapshot.docs.first,
+    );
+    final nicknameController =
+        TextEditingController(text: reservation['nickname'] ?? '');
+    final roomController =
+        TextEditingController(text: reservation['roomName'] ?? '');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('예약 수정'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: selectedItem.id,
+                decoration: const InputDecoration(labelText: '예약 항목'),
+                items: [
+                  for (final item in itemSnapshot.docs)
+                    DropdownMenuItem(
+                      value: item.id,
+                      child: Text(item.data()['name'] ?? item.id),
+                    ),
+                ],
+                onChanged: (itemId) {
+                  if (itemId == null) return;
+                  setState(() {
+                    selectedItem = itemSnapshot.docs
+                        .firstWhere((item) => item.id == itemId);
+                  });
+                },
+              ),
+              TextField(
+                controller: nicknameController,
+                decoration: const InputDecoration(labelText: '예약자 이름'),
+              ),
+              TextField(
+                controller: roomController,
+                decoration: const InputDecoration(labelText: '등록 경로'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == true && nicknameController.text.trim().isNotEmpty) {
+      await session.updateAdminReservation(
+        reservation: reservation,
+        itemId: selectedItem.id,
+        itemName: selectedItem.data()['name'] ?? selectedItem.id,
+        nickname: nicknameController.text,
+        roomName: roomController.text,
+      );
+    }
+    nicknameController.dispose();
+    roomController.dispose();
   }
 }
 
@@ -278,9 +392,14 @@ class _SummaryCard extends StatelessWidget {
 
 class _ReservationTile extends StatelessWidget {
   final Map<String, dynamic> data;
+  final VoidCallback? onEdit;
   final VoidCallback? onCancel;
 
-  const _ReservationTile({required this.data, required this.onCancel});
+  const _ReservationTile({
+    required this.data,
+    required this.onEdit,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -298,10 +417,19 @@ class _ReservationTile extends StatelessWidget {
         subtitle: Text(
           '$date · ${itemName.toString().isEmpty ? '항목 $itemId' : itemName}',
         ),
-        trailing: IconButton(
-          tooltip: '예약 취소',
-          onPressed: onCancel,
-          icon: const Icon(Icons.cancel_outlined),
+        trailing: Wrap(
+          children: [
+            IconButton(
+              tooltip: '예약 수정',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+            IconButton(
+              tooltip: '예약 취소',
+              onPressed: onCancel,
+              icon: const Icon(Icons.cancel_outlined),
+            ),
+          ],
         ),
       ),
     );

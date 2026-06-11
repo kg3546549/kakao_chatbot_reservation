@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>카카오톡 예약 자동화 플랫폼</title>
+  <!-- Google Fonts: Outfit for numbers, Pretendard webfont -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  
+  <style>
+    /* CSS Variables & Theme Tokens */
+    :root {
+      --color-primary: #40916c;
+      --color-secondary: #2d6a4f;
+      --color-dark: #1b4332;
+      --color-dark-rgb: 27, 67, 50;
+      --color-light-bg: #f8f9fa;
+      --color-white: #ffffff;
+      --color-text-dark: #2d312e;
+      --color-text-muted: #6e7571;
+      --color-accent-red: #e63946;
+      --color-light-red: #fff5f5;
+      --color-light-green: #d8f3dc;
+      --color-border: #e2e8f0;
+      --font-family: 'Pretendard', sans-serif;
+      --font-en: 'Outfit', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: #0c1511;
+      color: var(--color-text-dark);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Presentation Wrapper (16:9 Standard Box) */
+    #presentation-container {
+      position: relative;
+      width: 1333px;
+      height: 750px;
+      background-color: var(--color-light-bg);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform-origin: center center; /* Used by dynamic scale script */
+      flex-shrink: 0;
+    }
+
+    /* Individual Slide Frame */
+    .slide-wrapper {
+      position: relative;
+      flex: 1;
+      display: none;
+      padding: 50px 70px 70px 70px;
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    .slide-wrapper.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.995); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Common Slide Header */
+    .slide-header {
+      margin-bottom: 25px;
+      position: relative;
+      padding-bottom: 12px;
+    }
+
+    .slide-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--color-primary) 0%, rgba(64, 145, 108, 0.1) 100%);
+    }
+
+    .slide-num-label {
+      font-family: var(--font-en);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 2px;
+      display: block;
+    }
+
+    .slide-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--color-dark);
+      letter-spacing: -0.5px;
+    }
+
+    .slide-subtitle {
+      font-size: 14px;
+      color: var(--color-primary);
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    /* Slide Content Areas */
+    .slide-body {
+      flex: 1;
+      display: flex;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Utilities & Components */
+    .card {
+      background-color: var(--color-white);
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      padding: 25px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.accent {
+      border-top: 5px solid var(--color-primary);
+    }
+
+    .card.accent-secondary {
+      border-top: 5px solid var(--color-secondary);
+    }
+
+    .card.danger {
+      background-color: var(--color-light-red);
+      border: 1px solid #fed7d7;
+      border-top: 5px solid var(--color-accent-red);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-dark);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-bottom: 15px;
+      line-height: 1.4;
+    }
+
+    .card-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-list li {
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--color-text-dark);
+      position: relative;
+      padding-left: 16px;
+    }
+
+    .card-list li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      top: 1px;
+      color: var(--color-primary);
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .card.danger .card-list li::before {
+      content: '⚡';
+      color: var(--color-accent-red);
+    }
+
+    /* Dark Slide Theme (Cover/End) */
+    .slide-wrapper.dark-slide {
+      background-color: var(--color-dark);
+      color: var(--color-white);
+      justify-content: center;
+      align-items: flex-start;
+      padding: 80px 100px;
+    }
+
+    .slide-wrapper.dark-slide .slide-header::after {
+      display: none;
+    }
+
+    .slide-decor-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 12px;
+      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-light-green) 100%);
+    }
+
+    /* -------------------------------------------------------------
+       SLIDE-SPECIFIC LAYOUTS
+       ------------------------------------------------------------- */
+    
+    /* Cover & Thank You */
+    .cover-content {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+    }
+
+    .cover-title {
+      font-size: 48px;
+      font-weight: 900;
+      line-height: 1.25;
+      color: var(--color-white);
+      margin-bottom: 20px;
+      letter-spacing: -1px;
+    }
+
+    .cover-subtitle {
+      font-size: 17px;
+      color: var(--color-light-green);
+      line-height: 1.5;
+      margin-bottom: 40px;
+      font-weight: 300;
+    }
+
+    .cover-meta {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.4);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding-top: 15px;
+      display: inline-block;
+      letter-spacing: 1px;
+    }
+
+    /* Slide 2: Grid of 3 Cards */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-icon {
+      font-size: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      background-color: rgba(64, 145, 108, 0.1);
+      color: var(--color-primary);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    /* Slide 3: Split Layout */
+    .split-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      width: 100%;
+    }
+
+    .split-content {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--color-text-dark);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Slide 5: Flow Layout (4 Steps) */
+    .flow-container {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      gap: 10px;
+    }
+
+    .flow-step {
+      flex: 1;
+      background-color: var(--color-white);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .flow-step.active {
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-white);
+    }
+
+    .flow-step.accent {
+      background-color: var(--color-secondary);
+      border-color: var(--color-secondary);
+      color: var(--color-white);
+    }
+
+    .flow-step-num {
+      font-family: var(--font-en);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: 6px;
+    }
+
+    .flow-step.active .flow-step-num,
+    .flow-step.accent .flow-step-num {
+      color: var(--color-light-green);
+    }
+
+    .flow-step-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .flow-step.active .flow-step-title,
+    .flow-step.accent .flow-step-title {
+      color: var(--color-white);
+    }
+
+    .flow-step-desc {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--color-text-muted);
+      margin-bottom: 12px;
+    }
+
+    .flow-step.active .flow-step-desc,
+    .flow-step.accent .flow-step-desc {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .flow-step-example {
+      background-color: var(--color-light-bg);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: monospace;
+      color: var(--color-secondary);
+      border: 1px dashed var(--color-border);
+    }
+
+    .flow-step.active .flow-step-example,
+    .flow-step.accent .flow-step-example {
+      background-color: rgba(27, 67, 50, 0.3);
+      color: var(--color-light-green);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-primary);
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    /* Slide 6: Grid 2x2 */
+    .grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+    }
+
+    .grid-2x2 .card {
+      padding: 16px 20px;
+      flex-direction: row;
+      gap: 15px;
+      align-items: flex-start;
+    }
+
+    .card-icon-left {
+      font-size: 18px;
+      padding: 8px;
+      background-color: rgba(64, 145, 108, 0.1);
+      border-radius: 8px;
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    .grid-2x2 .card.accent-secondary .card-icon-left {
+      background-color: rgba(45, 106, 79, 0.1);
+      color: var(--color-secondary);
+    }
+
+    .card-content-right {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .card-content-right h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-dark);
+      margin-bottom: 4px;
+    }
+
+    .card-tech-name {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .card-content-right p {
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--color-text-dark);
+    }
+
+    /* Slide 8: Technical Column details */
+    .tech-card-dark {
+      background-color: var(--color-primary);
+      color: var(--color-white);
+      border: none;
+    }
+
+    .tech-card-dark .card-title {
+      color: var(--color-white);
+    }
+
+    .tech-card-dark .card-list li::before {
+      color: var(--color-light-green);
+    }
+
+    .tech-card-dark .card-list li {
+      color: var(--color-white);
+    }
+
+    /* Slide 9: Case Studies */
+    .slide-memo {
+      position: absolute;
+      bottom: -45px;
+      left: 0;
+      font-size: 10.5px;
+      color: var(--color-text-muted);
+    }
+
+    /* Slide 10: Roadmap */
+    .roadmap-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .roadmap-card {
+      background-color: rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .roadmap-phase {
+      font-family: var(--font-en);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-light-green);
+      margin-bottom: 6px;
+    }
+
+    .roadmap-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--color-white);
+      margin-bottom: 8px;
+    }
+
+    .roadmap-desc {
+      font-size: 10.5px;
+      line-height: 1.5;
+      color: var(--color-light-green);
+      opacity: 0.85;
+    }
+
+    /* Bottom Control Bar */
+    #control-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      background-color: var(--color-white);
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      z-index: 100;
+    }
+
+    .logo-watermark {
+      font-family: var(--font-en);
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--color-dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-watermark span {
+      background-color: var(--color-primary);
+      color: var(--color-white);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .navigation-controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .nav-btn {
+      background-color: var(--color-light-bg);
+      border: 1px solid var(--color-border);
+      color: var(--color-dark);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      background-color: var(--color-primary);
+      color: var(--color-white);
+      border-color: var(--color-primary);
+    }
+
+    .slide-progress-indicator {
+      font-family: var(--font-en);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+
+    .slide-progress-indicator span {
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+
+    /* -------------------------------------------------------------
+       PRINT STYLES
+       ------------------------------------------------------------- */
+    @media print {
+      body {
+        background-color: white !important;
+        overflow: visible;
+      }
+      
+      #presentation-container {
+        width: 100% !important;
+        height: 100% !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+        transform: none !important;
+      }
+
+      .slide-wrapper {
+        display: flex !important;
+        page-break-after: always !important;
+        width: 1333px !important;
+        height: 750px !important;
+        padding: 50px 70px 70px 70px !important;
+        position: relative !important;
+      }
+
+      .slide-wrapper.dark-slide {
+        padding: 80px 100px !important;
+        background-color: #1b4332 !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      #control-bar {
+        display: none !important;
+      }
+
+      .card {
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="presentation-container">
+    
+    <!-- -------------------------------------------------------------
+         SLIDE 1: COVER
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper dark-slide active" data-slide-index="1">
+      <div class="slide-decor-bar"></div>
+      <div class="cover-content">
+        <h1 class="cover-title">카카오톡 예약 자동화 플랫폼</h1>
+        <p class="cover-subtitle">실시간 대화 감지 및 클라우드 연동 예약 관리 솔루션</p>
+        <div class="cover-meta">
+          PROJECT INTRODUCTION &nbsp;&bull;&nbsp; PRETENDARD FONT OPTIMIZED
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 2: INDUSTRIES
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="2">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 01</span>
+        <h2 class="slide-title">카카오톡 예약을 받는 주요 업종</h2>
+        <p class="slide-subtitle">매장 내 단골 고객 소모임 활성화가 매장 생존 및 단골 확보의 핵심인 비즈니스군</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <!-- Card 1 -->
+          <div class="card accent">
+            <div class="card-icon">⚽</div>
+            <h3 class="card-title">레저 및 스포츠</h3>
+            <p class="card-desc">예약/매칭 주기가 잦고 친목이 바탕이 되는 업종</p>
+            <ul class="card-list">
+              <li><strong>홀덤펍</strong>: 테이블 착석 및 참가 예약</li>
+              <li><strong>탁구장 / 당구장</strong>: 동호인 매치 예약</li>
+              <li><strong>스크린골프 / 볼링장</strong>: 팀별 라인 예약</li>
+            </ul>
+          </div>
+          <!-- Card 2 -->
+          <div class="card accent">
+            <div class="card-icon">🏢</div>
+            <h3 class="card-title">공간 대여 / 대관</h3>
+            <p class="card-desc">정원 제한이 있고 실시간 룸 현황이 중요한 업종</p>
+            <ul class="card-list">
+              <li><strong>풋살장 / 실내체육관</strong>: 단체 대관 예약</li>
+              <li><strong>파티룸 / 대여 스튜디오</strong>: 공간 대여</li>
+              <li><strong>공유오피스 / 스터디 카페</strong>: 회의실 예약</li>
+            </ul>
+          </div>
+          <!-- Card 3 -->
+          <div class="card accent">
+            <div class="card-icon">🎲</div>
+            <h3 class="card-title">밀착 커뮤니티형</h3>
+            <p class="card-desc">매장 내 체류 시간이 길고 즉석 매칭이 활발한 곳</p>
+            <ul class="card-list">
+              <li><strong>보드게임 / 방탈출 카페</strong>: 이용 시간 예약</li>
+              <li><strong>PC방 팀룸</strong>: 대규모 좌석 지정 예약</li>
+              <li><strong>소규모 피트니스 / 크로스핏</strong>: 세션 예약</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 3: COMMUNITY VALUE
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="3">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 02</span>
+        <h2 class="slide-title">고객 커뮤니티 구축 = 오프라인 매장의 매출 확보</h2>
+        <p class="slide-subtitle">단순 예약을 넘어 고객 간 친목 네트워크가 단골 확보로 이어지는 구조</p>
+      </div>
+      <div class="slide-body">
+        <div class="split-2">
+          <div class="card accent">
+            <h3 class="card-title">단골 고객 락인(Lock-in) 효과</h3>
+            <div class="split-content">
+              <p>• <strong>친목 소모임 진화</strong>: 방문 목적이 단순 소비에서 '회원 간 매치 및 교류'로 전환</p>
+              <p>• <strong>재방문율 극대화</strong>: 단골 고객 간의 관계망이 촘촘할수록 경쟁 매장 이탈 방지</p>
+              <p>• <strong>자발적 신규 유치</strong>: 단골 회원이 스스로 다른 참가자를 대관 및 동반 예약 유도</p>
+            </div>
+          </div>
+          <div class="card accent-secondary">
+            <h3 class="card-title">단체 카톡방: 예약과 모집의 허브</h3>
+            <div class="split-content">
+              <p>• <strong>일상적 약속 장소</strong>: 이용자 및 매니저가 소통하는 실질적인 채널은 오픈 단톡방</p>
+              <p>• <strong>대화 맥락 내 예약</strong>: "오늘 밤 한 게임 치실 분?" 대화 도중 이탈 없이 즉시 예약</p>
+              <p>• <strong>동선 단절 제로화</strong>: 외부 웹/앱 이동 및 로그인 단계를 제거해 연결 편의성 제공</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 4: PAIN POINTS
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="4">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 03</span>
+        <h2 class="slide-title">기존 예약 방식의 고충 (Pain Points)</h2>
+        <p class="slide-subtitle">채널 파편화 및 수동 관리로 인해 끊어지는 예약 동선과 관리 업무의 비효율</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <!-- Card 1 -->
+          <div class="card danger">
+            <h3 class="card-title" style="color: var(--color-accent-red)">불편한 외부 예약 방식</h3>
+            <p class="card-desc" style="color: var(--color-accent-red)">대화방 이탈 및 동선 파편화</p>
+            <ul class="card-list">
+              <li>단톡방을 나가 외부 사이트로 이동하는 불편함</li>
+              <li>매번 로그인 및 예약 정보 입력의 번거로움</li>
+              <li>예약 결과를 복사해 다시 톡방 공유하는 단절</li>
+            </ul>
+          </div>
+          <!-- Card 2 -->
+          <div class="card danger">
+            <h3 class="card-title" style="color: var(--color-accent-red)">공식 챗봇의 단체방 불허</h3>
+            <p class="card-desc" style="color: var(--color-accent-red)">오픈채팅방 내 챗봇 가동 불가</p>
+            <ul class="card-list">
+              <li>카카오 채널 API는 1:1 대화방만 지원 및 감지</li>
+              <li>단체 오픈채팅방 초대 및 파싱 원천 불가</li>
+              <li>고정 시나리오 회신 (실시간 DB 연동 불가)</li>
+            </ul>
+          </div>
+          <!-- Card 3 -->
+          <div class="card danger">
+            <h3 class="card-title" style="color: var(--color-accent-red)">점주의 수동 장부 관리</h3>
+            <p class="card-desc" style="color: var(--color-accent-red)">수동 엑셀 기입에 따른 오류</p>
+            <ul class="card-list">
+              <li>톡방 예약을 매니저가 손으로 엑셀/종이에 수기 기입</li>
+              <li>피크 타임 예약 누락 및 오버부킹 빈번하게 발생</li>
+              <li>실시간 잔여 석 정보 공유 지연으로 업무 부하 증가</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 5: SOLUTIONS (4 Steps Flow)
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="5">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 04</span>
+        <h2 class="slide-title">실시간 카카오톡 예약 자동 연동 4단계</h2>
+        <p class="slide-subtitle">고객이 톡방에 예약을 올리면 봇이 감지하여 예약 장부를 쓰고 즉각적인 푸시 및 알림을 전송합니다.</p>
+      </div>
+      <div class="slide-body" style="align-items: center;">
+        <div class="flow-container">
+          <!-- Step 1 -->
+          <div class="flow-step">
+            <div>
+              <div class="flow-step-num">STEP 01</div>
+              <h3 class="flow-step-title">예약 메시지 작성</h3>
+              <p class="flow-step-desc">고객이 오픈 단톡방에서 대화 도중 지정된 명령어 약식으로 예약을 요청합니다.</p>
+            </div>
+            <div class="flow-step-example">
+              고객: /예약 19시 홍길동
+            </div>
+          </div>
+          
+          <div class="flow-arrow">▶</div>
+
+          <!-- Step 2 -->
+          <div class="flow-step active">
+            <div>
+              <div class="flow-step-num">STEP 02</div>
+              <h3 class="flow-step-title">알림 감시 및 답장</h3>
+              <p class="flow-step-desc">전용 봇 앱이 알림을 가로채 로컬 정원을 확인한 후 즉시 자동 완료 답장을 발송합니다.</p>
+            </div>
+            <div class="flow-step-example">
+              봇: 홍길동님 예약 완료 (8/10명)
+            </div>
+          </div>
+
+          <div class="flow-arrow">▶</div>
+
+          <!-- Step 3 -->
+          <div class="flow-step">
+            <div>
+              <div class="flow-step-num">STEP 03</div>
+              <h3 class="flow-step-title">실시간 서버 동기화</h3>
+              <p class="flow-step-desc">로컬에서 체결된 예약 정보가 테넌트별 격리 데이터베이스에 백그라운드로 즉시 동기화됩니다.</p>
+            </div>
+            <div class="flow-step-example">
+              결과: 서버 데이터베이스 실시간 동기화
+            </div>
+          </div>
+
+          <div class="flow-arrow">▶</div>
+
+          <!-- Step 4 -->
+          <div class="flow-step accent">
+            <div>
+              <div class="flow-step-num">STEP 04</div>
+              <h3 class="flow-step-title">관리자 스마트폰 푸시</h3>
+              <p class="flow-step-desc">동기화 성사 시 점주의 전용 관리 기기로 FCM 푸시 알림이 발송되고 현황판이 즉시 갱신됩니다.</p>
+            </div>
+            <div class="flow-step-example">
+              결과: 점주 푸시 알림 및 대시보드 갱신
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 6: MANAGER APP FEATURES
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="6">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 05</span>
+        <h2 class="slide-title">구현 기능: 점주 및 관리자용 모바일 관리 앱</h2>
+        <p class="slide-subtitle">매장 점주와 직원이 예약을 실시간 모니터링하고 직접 제어할 수 있는 스마트 관리 화면</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2x2">
+          <!-- Feature 1 -->
+          <div class="card">
+            <div class="card-icon-left">📊</div>
+            <div class="card-content-right">
+              <h4>실시간 예약 대시보드 현황판</h4>
+              <p>날짜별 현황 모니터링을 통해 예약 종류별 정원과 확정자 명단을 실시간 조회하고, 정원 대비 인원 현황을 카드 그래프 형태로 직관적 노출합니다.</p>
+            </div>
+          </div>
+          <!-- Feature 2 -->
+          <div class="card accent-secondary">
+            <div class="card-icon-left">✏️</div>
+            <div class="card-content-right">
+              <h4>간편 예약 관리 제어 및 수동 조작</h4>
+              <p>대시보드 터치 조작으로 직접 예약을 수동 추가, 수정, 대기 지정 및 취소(CRUD)를 즉각 처리하며, 변경 내역은 봇 단말과 클라우드에 즉각 연동됩니다.</p>
+            </div>
+          </div>
+          <!-- Feature 3 -->
+          <div class="card accent-secondary">
+            <div class="card-icon-left">🔔</div>
+            <div class="card-content-right">
+              <h4>즉각적인 예약 푸시 알림</h4>
+              <p>단톡방 예약 성사 즉시 관리자 단말로 실시간 알림(FCM)이 발송되며, 알림을 터치하면 예약 현황과 상세 상세/이력 조회 페이지로 즉각 스위칭 이동합니다.</p>
+            </div>
+          </div>
+          <!-- Feature 4 -->
+          <div class="card">
+            <div class="card-icon-left">👥</div>
+            <div class="card-content-right">
+              <h4>다중 지점 생성 및 매장 직원 관리</h4>
+              <p>점주 계정 하나로 다수의 매장(Tenant)을 생성 및 연동 전환 관리하고, 7일 만기 초대 코드를 이용해 직원을 매니저(Manager) 역할로 격리 등록합니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 7: CHATBOT FEATURES
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="7">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 06</span>
+        <h2 class="slide-title">구현 기능: 24시간 자동 응답 예약 챗봇 및 설정</h2>
+        <p class="slide-subtitle">매장에 거치된 안드로이드 기기를 활용해 단톡방 예약을 파싱하고 템플릿 설정을 커스텀하는 기능</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2x2">
+          <!-- Feature 1 -->
+          <div class="card">
+            <div class="card-icon-left">💬</div>
+            <div class="card-content-right">
+              <h4>단톡방 명령어 자동 파싱 및 답장</h4>
+              <p>오픈 단톡방 내 <code>/예약</code>, <code>/취소</code>, <code>/조회</code> 키워드를 실시간 식별하고, 로컬 DB 정원 조회 즉시 완료 통보 및 잔여 석 현황 자동 답장을 발송합니다.</p>
+            </div>
+          </div>
+          <!-- Feature 2 -->
+          <div class="card accent-secondary">
+            <div class="card-icon-left">🔒</div>
+            <div class="card-content-right">
+              <h4>채팅방 성격 분류 및 권한 관리</h4>
+              <p>대화방을 예약방, 관리자 전용방, 일반방으로 명확히 구분하여 데이터 <code>/초기화</code>, <code>/세팅정원</code> 등의 민감 설정은 관리자방에서만 허가 처리합니다.</p>
+            </div>
+          </div>
+          <!-- Feature 3 -->
+          <div class="card accent-secondary">
+            <div class="card-icon-left">⚙️</div>
+            <div class="card-content-right">
+              <h4>예약 항목 및 자동 응답 템플릿 설정</h4>
+              <p>예약 가능한 항목 이름, 최대 정원을 모바일 앱 내에서 자유롭게 제어하며, 항목 삭제 시 기존 예약 데이터도 연쇄 소거(CASCADE)되고 자동 답변 템플릿을 커스텀 정의합니다.</p>
+            </div>
+          </div>
+          <!-- Feature 4 -->
+          <div class="card">
+            <div class="card-icon-left">🕒</div>
+            <div class="card-content-right">
+              <h4>영업 주기 기준 예약 자동 초기화</h4>
+              <p>설정된 마감 시각(예: 새벽 4시)에 도달하면 수집된 당일 예약 장부를 매일 자동 일괄 초기화하며, 설정값은 클라우드 서버에 안전 백업되어 기기 복원이 가능합니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 8: SYSTEM STABILITY
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="8">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 07</span>
+        <h2 class="slide-title">시스템 동작 안정성 및 데이터 유실 방지 장치</h2>
+        <p class="slide-subtitle">24시간 무중단 알림 수집 감시 엔진과 네트워크 단절 복구 아키텍처</p>
+      </div>
+      <div class="slide-body">
+        <div class="split-2">
+          <div class="card primary-card-dark" style="background-color: var(--color-primary); color: white; border: none;">
+            <h3 class="card-title" style="color: white;">🛡️ 포그라운드 Keep-Alive 및 5분 주기 Watchdog</h3>
+            <span class="card-tech-name" style="color: var(--color-light-green)">(Android Foreground Service & Rebind Scheduler)</span>
+            <div class="split-content" style="color: rgba(255,255,255,0.9); margin-top: 10px;">
+              <p>• <strong>상시 실행 서비스 등록</strong>: 상시 실행 알림(START_STICKY)을 등록하여 스마트폰 OS 커널의 메모리 부족으로 인한 프로세스 강제 종료 위협을 전격 방어합니다.</p>
+              <p>• <strong>5분 Watchdog 감시 루프</strong>: 메인 실행 프로세스와 완전히 차단된 독립 스레드가 5분 간격으로 카톡 알림 리스너의 가동 여부를 상시 순회 검증합니다.</p>
+              <p>• <strong>자가 회복 엔진 (requestRebind)</strong>: 절전 모드로 기기가 unbind된 상태를 적발하면 즉시 코드로 자동 연결을 복원해 무중단 구동을 유지합니다.</p>
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="card-title">⏳ 오프라인 대기 큐 및 자동 재시도 알고리즘</h3>
+            <span class="card-tech-name">(SQLite Sync Queue & Exponential Backoff)</span>
+            <div class="split-content" style="margin-top: 10px;">
+              <p>• <strong>오프라인 우선 예약 보존</strong>: 매장의 기기 네트워크가 끊겨도, 수집된 예약을 로컬 SQLite 동기화 큐에 즉시 임시 보존하여 고객 응답을 끊김 없이 진행합니다.</p>
+              <p>• <strong>지수 백오프 기반 전송</strong>: 네트워크 상태 복구 시, 보존된 큐에서 데이터를 지수 백오프 재시도 알고리즘을 활용해 차례대로 업로드합니다.</p>
+              <p>• <strong>UUID 고유 식별자 할당</strong>: 중복 이벤트 전송 및 충돌을 원천 차단하기 위해 UUID 멱등성 검증 서버 로직을 기본 장착했습니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 9: CASE STUDIES
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper" data-slide-index="9">
+      <div class="slide-header">
+        <span class="slide-num-label">Section 08</span>
+        <h2 class="slide-title">실질적 도입 및 운영 사례 (Case Studies)</h2>
+        <p class="slide-subtitle">오프라인 매장 현장에서 예약 리소스를 극대화하고 오버부킹을 없앤 실제 제휴 사례</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <!-- Case 1 -->
+          <div class="card accent">
+            <h3 class="card-title">A 홀덤펍 강남점</h3>
+            <span class="card-tech-name">도입 완료 및 가동 중</span>
+            <ul class="card-list">
+              <li><strong>도입 형태</strong>: 매장 내 태블릿 1대 배치 (예약봇 모드로 구동)</li>
+              <li><strong>운영 성과</strong>: 일평균 약 90건의 톡방 자동예약 처리</li>
+              <li>수동 장부 대조 불일치 및 오버부킹 0% 달성</li>
+            </ul>
+          </div>
+          <!-- Case 2 -->
+          <div class="card accent">
+            <h3 class="card-title">B 실내 탁구클럽 동호회</h3>
+            <span class="card-tech-name">도입 완료 및 가동 중</span>
+            <ul class="card-list">
+              <li><strong>도입 형태</strong>: 동호인 단톡방 연동 챗봇 & 대시보드 공유</li>
+              <li><strong>운영 성과</strong>: 회원 친목 게임 매칭 활성화율 35% 증대</li>
+              <li>코치진 업무 단순화 및 실시간 정원 도달 시간 단축</li>
+            </ul>
+          </div>
+          <!-- Case 3 -->
+          <div class="card accent">
+            <h3 class="card-title">C 스크린골프 / 볼링장</h3>
+            <span class="card-tech-name">도입 및 커스텀 조율 중</span>
+            <ul class="card-list">
+              <li><strong>도입 형태</strong>: 라인 현황판 연동 실시간 알림 시스템</li>
+              <li><strong>운영 성과</strong>: 전화/대기 문의 응대 리소스 약 85% 감축</li>
+              <li>대기열 알림 연동으로 오버부킹 방지</li>
+            </ul>
+          </div>
+        </div>
+        <div class="slide-memo">※ [작성용 가이드]: 실제 제휴 매장 및 도입처의 상세 데이터로 텍스트를 즉시 변경하여 활용할 수 있습니다.</div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 10: CONCLUSION & ROADMAP
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper dark-slide" data-slide-index="10">
+      <div class="slide-decor-bar"></div>
+      <div class="cover-content" style="width: 100%; max-width: 100%;">
+        <h1 class="cover-title" style="font-size: 38px;">예약 자동화와 커뮤니티 결속을 동시에</h1>
+        <p class="cover-subtitle" style="margin-bottom: 30px;">단톡방 대화에서 예약 장부까지 물 흐르듯 연결되는 오프라인 매장의 새로운 운영 표준</p>
+        
+        <h3 style="font-size: 15px; color: var(--color-primary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px;">■ 서비스 고도화 및 기술 로드맵</h3>
+        
+        <div class="roadmap-container">
+          <!-- Step 1 -->
+          <div class="roadmap-card">
+            <div class="roadmap-phase">Phase 1</div>
+            <h4 class="roadmap-title">예약 대기열 자동화</h4>
+            <p class="roadmap-desc">정원 초과 시 대기 순서 부여. 취소 발생 시 자동으로 대기자 예약 전환 및 단톡방 챗봇 알림 발송.</p>
+          </div>
+          <!-- Step 2 -->
+          <div class="roadmap-card">
+            <div class="roadmap-phase">Phase 2</div>
+            <h4 class="roadmap-title">통합 웹 콘솔 출시</h4>
+            <p class="roadmap-desc">플랫폼 운영사용 어드민 웹 페이지를 추가 런칭하여 가맹 지점 개설, 라이선스 원격 제어 통합 관리.</p>
+          </div>
+          <!-- Step 3 -->
+          <div class="roadmap-card">
+            <div class="roadmap-phase">Phase 3</div>
+            <h4 class="roadmap-title">클라이언트 보안</h4>
+            <p class="roadmap-desc">비인가 단말의 API 탈취 방어. Play Integrity 및 Firebase App Check 보안 규격 강제 선언.</p>
+          </div>
+          <!-- Step 4 -->
+          <div class="roadmap-card">
+            <div class="roadmap-phase">Phase 4</div>
+            <h4 class="roadmap-title">AI 예측 분석 리포트</h4>
+            <p class="roadmap-desc">예약 밀집 요일/시간 예측 모형 탑재. 단골 이용자 방문 사이클 분석을 통한 마케팅 보고서 제공.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         SLIDE 11: THANK YOU
+         ------------------------------------------------------------- -->
+    <section class="slide-wrapper dark-slide" data-slide-index="11">
+      <div class="slide-decor-bar"></div>
+      <div class="cover-content">
+        <h1 class="cover-title" style="font-size: 54px; margin-bottom: 15px;">감사합니다</h1>
+        <p class="cover-subtitle" style="font-size: 20px; font-weight: 600; color: var(--color-light-green); margin-bottom: 50px;">Q&A 및 문의사항</p>
+        <div class="cover-meta" style="font-size: 14px; color: var(--color-white); border-top: 1px dashed rgba(255,255,255,0.25); width: 100%; max-width: 500px;">
+          <p style="margin: 15px 0;">• 이메일: contact@example.com</p>
+          <p style="margin: 15px 0;">• 연락처: 010-XXXX-XXXX</p>
+          <p style="margin: 15px 0;">• 주소: [회사/사무실 주소 입력용]</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------
+         BOTTOM CONTROL BAR
+         ------------------------------------------------------------- -->
+    <div id="control-bar">
+      <div class="logo-watermark">
+        <span>KAKAO BOT</span> 카카오톡 예약 자동화 플랫폼
+      </div>
+      <div class="navigation-controls">
+        <button class="nav-btn" id="prev-btn">이전 (Left)</button>
+        <div class="slide-progress-indicator">
+          <span id="current-slide-num">1</span> / <span id="total-slide-num">11</span>
+        </div>
+        <button class="nav-btn" id="next-btn">다음 (Right)</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const container = document.getElementById('presentation-container');
+    const slides = document.querySelectorAll('.slide-wrapper');
+    const currentNum = document.getElementById('current-slide-num');
+    const totalNum = document.getElementById('total-slide-num');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    
+    let currentSlideIndex = 1;
+    const totalSlides = slides.length;
+    totalNum.textContent = totalSlides;
+
+    // Dynamic scale to fit window perfectly without scrollbars
+    function handleResize() {
+      const w = 1333;
+      const h = 750;
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      
+      const scaleX = windowWidth / w;
+      const scaleY = windowHeight / h;
+      
+      // Choose the smaller scaling ratio, with a small padding margin
+      const scale = Math.min(scaleX, scaleY) * 0.95;
+      
+      container.style.transform = `scale(${scale})`;
+    }
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('load', handleResize);
+    handleResize(); // Initial call
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+
+      slides.forEach(slide => slide.classList.remove('active'));
+      const activeSlide = document.querySelector(`.slide-wrapper[data-slide-index="${index}"]`);
+      if (activeSlide) {
+        activeSlide.classList.add('active');
+      }
+
+      currentSlideIndex = index;
+      currentNum.textContent = index;
+
+      prevBtn.style.opacity = index === 1 ? '0.5' : '1';
+      nextBtn.style.opacity = index === totalSlides ? '0.5' : '1';
+    }
+
+    prevBtn.addEventListener('click', () => {
+      showSlide(currentSlideIndex - 1);
+    });
+
+    nextBtn.addEventListener('click', () => {
+      showSlide(currentSlideIndex + 1);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        showSlide(currentSlideIndex + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
+        e.preventDefault();
+        showSlide(currentSlideIndex - 1);
+      }
+    });
+
+    showSlide(currentSlideIndex);
+  </script>
+</body>
+</html>

@@ -1,9 +1,11 @@
 import 'dart:ui';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'providers/bot_provider.dart';
 import 'providers/session_provider.dart';
@@ -11,16 +13,41 @@ import 'services/push_notification_service.dart';
 import 'ui/screens/auth_gate.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+  );
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+  );
+  try {
+    await FirebaseAppCheck.instance.getToken(true);
+  } catch (error, stack) {
+    await FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      reason: 'App Check token refresh failed',
+      fatal: false,
+    );
+  }
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  PushNotificationService.instance.onNotificationTap = (_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    });
+  };
   await PushNotificationService.instance.initialize();
 
   // Flutter 프레임워크 오류 → Crashlytics
@@ -49,6 +76,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: '카카오톡 예약 관리',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

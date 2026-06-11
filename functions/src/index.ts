@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import { defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
@@ -10,7 +11,8 @@ initializeApp();
 
 const db = getFirestore();
 const region = "asia-northeast3";
-const bootstrapAdminEmail = "kg354654932@gmail.com";
+const bootstrapAdminEmail = defineString("BOOTSTRAP_ADMIN_EMAIL");
+const callableOptions = { region, enforceAppCheck: true };
 
 type Role = "owner" | "manager" | "viewer" | "botDevice";
 
@@ -35,7 +37,58 @@ async function requireMembership(uid: string, tenantId: string, roles?: Role[]) 
   return member;
 }
 
-export const createTenant = onCall({ region }, async (request) => {
+async function requireItemManagementAccess(
+  uid: string,
+  tenantId: string,
+  sourceDeviceId: string,
+) {
+  const member = await requireMembership(
+    uid,
+    tenantId,
+    ["owner", "manager", "botDevice"],
+  );
+  if (member.get("role") !== "botDevice") return;
+
+  const [tenant, device] = await Promise.all([
+    db.doc(`tenants/${tenantId}`).get(),
+    db.doc(`tenants/${tenantId}/devices/${sourceDeviceId}`).get(),
+  ]);
+  if (
+    !sourceDeviceId
+    || tenant.get("activeBotDeviceId") !== sourceDeviceId
+    || !device.exists
+    || device.get("uid") !== uid
+    || device.get("mode") !== "bot"
+    || device.get("status") !== "active"
+  ) {
+    throw new HttpsError("permission-denied", "활성 예약봇 기기가 아닙니다.");
+  }
+}
+
+async function requireActiveBotDevice(
+  uid: string,
+  tenantId: string,
+  deviceId: string,
+) {
+  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  const [tenant, device] = await Promise.all([
+    db.doc(`tenants/${tenantId}`).get(),
+    db.doc(`tenants/${tenantId}/devices/${deviceId}`).get(),
+  ]);
+  if (
+    !deviceId
+    || tenant.get("activeBotDeviceId") !== deviceId
+    || !device.exists
+    || device.get("uid") !== uid
+    || device.get("mode") !== "bot"
+    || device.get("status") !== "active"
+  ) {
+    throw new HttpsError("permission-denied", "활성 예약봇 기기가 아닙니다.");
+  }
+}
+
+export const createTenant = onCall(callableOptions, async (request) => {
+  requirePlatformAdmin(request);
   const uid = request.auth?.uid;
   const name = String(request.data?.name ?? "").trim();
   if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -71,7 +124,7 @@ export const createTenant = onCall({ region }, async (request) => {
   return { tenantId };
 });
 
-export const updateTenantStatus = onCall({ region }, async (request) => {
+export const updateTenantStatus = onCall(callableOptions, async (request) => {
   requirePlatformAdmin(request);
   const tenantId = String(request.data?.tenantId ?? "");
   const status = String(request.data?.status ?? "");
@@ -93,10 +146,10 @@ export const updateTenantStatus = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const bootstrapPlatformAdmin = onCall({ region }, async (request) => {
+export const bootstrapPlatformAdmin = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-  if (request.auth?.token.email !== bootstrapAdminEmail) {
+  if (request.auth?.token.email !== bootstrapAdminEmail.value()) {
     throw new HttpsError(
       "permission-denied",
       "지정된 최초 플랫폼 관리자 계정만 설정할 수 있습니다.",
@@ -130,7 +183,7 @@ export const bootstrapPlatformAdmin = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const registerDevice = onCall({ region }, async (request) => {
+export const registerDevice = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const deviceId = String(request.data?.deviceId ?? "");
@@ -175,7 +228,7 @@ export const registerDevice = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const unregisterDevice = onCall({ region }, async (request) => {
+export const unregisterDevice = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const deviceId = String(request.data?.deviceId ?? "");
@@ -208,7 +261,7 @@ export const unregisterDevice = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const releaseBotDevice = onCall({ region }, async (request) => {
+export const releaseBotDevice = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const deviceId = String(request.data?.deviceId ?? "");
@@ -238,7 +291,7 @@ export const releaseBotDevice = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const addTenantMember = onCall({ region }, async (request) => {
+export const addTenantMember = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const email = String(request.data?.email ?? "").trim().toLowerCase();
@@ -286,7 +339,7 @@ export const addTenantMember = onCall({ region }, async (request) => {
   return { success: true, uid: targetUser.uid };
 });
 
-export const removeTenantMember = onCall({ region }, async (request) => {
+export const removeTenantMember = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const memberUid = String(request.data?.memberUid ?? "");
@@ -312,7 +365,7 @@ export const removeTenantMember = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const upsertItem = onCall({ region }, async (request) => {
+export const upsertItem = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const itemId = String(request.data?.itemId ?? "");
@@ -322,7 +375,11 @@ export const upsertItem = onCall({ region }, async (request) => {
   if (!tenantId || !itemId || !name || !Number.isInteger(maxCapacity) || maxCapacity <= 0) {
     throw new HttpsError("invalid-argument", "유효한 예약 항목 정보가 필요합니다.");
   }
-  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  await requireItemManagementAccess(
+    uid,
+    tenantId,
+    String(request.data?.sourceDeviceId ?? ""),
+  );
 
   await db.doc(`tenants/${tenantId}/items/${itemId}`).set({
     itemId,
@@ -335,7 +392,7 @@ export const upsertItem = onCall({ region }, async (request) => {
   return { success: true };
 });
 
-export const deleteItem = onCall({ region }, async (request) => {
+export const deleteItem = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const itemId = String(request.data?.itemId ?? "");
@@ -343,12 +400,229 @@ export const deleteItem = onCall({ region }, async (request) => {
   if (!tenantId || !itemId) {
     throw new HttpsError("invalid-argument", "tenantId와 itemId가 필요합니다.");
   }
-  await requireMembership(uid, tenantId, ["owner", "manager", "botDevice"]);
+  await requireItemManagementAccess(
+    uid,
+    tenantId,
+    String(request.data?.sourceDeviceId ?? ""),
+  );
   await db.doc(`tenants/${tenantId}/items/${itemId}`).delete();
   return { success: true };
 });
 
-export const createReservationEvent = onCall({ region }, async (request) => {
+export const createTenantInvite = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const email = String(request.data?.email ?? "").trim().toLowerCase();
+  const role = String(request.data?.role ?? "viewer") as Role;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !email || !["owner", "manager", "viewer", "botDevice"].includes(role)) {
+    throw new HttpsError("invalid-argument", "유효한 초대 정보가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner"]);
+
+  const tenant = await db.doc(`tenants/${tenantId}`).get();
+  const inviteId = randomUUID();
+  await db.doc(`tenantInvites/${inviteId}`).create({
+    tenantId,
+    tenantName: String(tenant.get("name") ?? ""),
+    email,
+    role,
+    status: "pending",
+    createdBy: uid,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+  });
+  return { inviteId, expiresInDays: 7 };
+});
+
+export const acceptTenantInvite = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const email = String(request.auth?.token.email ?? "").trim().toLowerCase();
+  const inviteId = String(request.data?.inviteId ?? "").trim();
+  if (!uid || !email) throw new HttpsError("unauthenticated", "이메일 로그인이 필요합니다.");
+  if (!inviteId) throw new HttpsError("invalid-argument", "초대 코드가 필요합니다.");
+
+  const inviteRef = db.doc(`tenantInvites/${inviteId}`);
+  await db.runTransaction(async (transaction) => {
+    const invite = await transaction.get(inviteRef);
+    if (!invite.exists || invite.get("status") !== "pending") {
+      throw new HttpsError("not-found", "유효한 초대가 아닙니다.");
+    }
+    if (invite.get("email") !== email) {
+      throw new HttpsError("permission-denied", "초대받은 이메일과 로그인 이메일이 다릅니다.");
+    }
+    const expiresAt = invite.get("expiresAt") as Timestamp | undefined;
+    if (!expiresAt || expiresAt.toMillis() < Date.now()) {
+      throw new HttpsError("deadline-exceeded", "초대가 만료되었습니다.");
+    }
+    const tenantId = String(invite.get("tenantId") ?? "");
+    const tenant = await transaction.get(db.doc(`tenants/${tenantId}`));
+    if (!tenant.exists || tenant.get("status") !== "active") {
+      throw new HttpsError("failed-precondition", "현재 이용할 수 없는 가게입니다.");
+    }
+    const membership = {
+      tenantId,
+      tenantName: String(invite.get("tenantName") ?? tenant.get("name") ?? ""),
+      role: String(invite.get("role") ?? "viewer"),
+      status: "active",
+      joinedAt: FieldValue.serverTimestamp(),
+    };
+    transaction.set(db.doc(`tenants/${tenantId}/members/${uid}`), {
+      email,
+      role: membership.role,
+      status: "active",
+      joinedAt: FieldValue.serverTimestamp(),
+      invitedBy: invite.get("createdBy"),
+    }, { merge: true });
+    transaction.set(db.doc(`users/${uid}/tenantMemberships/${tenantId}`), membership, {
+      merge: true,
+    });
+    transaction.update(inviteRef, {
+      status: "accepted",
+      acceptedBy: uid,
+      acceptedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { success: true };
+});
+
+export const listTenantInvites = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId) throw new HttpsError("invalid-argument", "tenantId가 필요합니다.");
+  await requireMembership(uid, tenantId, ["owner"]);
+
+  const invites = await db.collection("tenantInvites")
+    .where("tenantId", "==", tenantId)
+    .where("status", "==", "pending")
+    .get();
+  return {
+    invites: invites.docs.map((invite) => ({
+      inviteId: invite.id,
+      email: String(invite.get("email") ?? ""),
+      role: String(invite.get("role") ?? "viewer"),
+      expiresAt: (invite.get("expiresAt") as Timestamp | undefined)?.toMillis() ?? 0,
+    })),
+  };
+});
+
+export const revokeTenantInvite = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const inviteId = String(request.data?.inviteId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !inviteId) {
+    throw new HttpsError("invalid-argument", "tenantId와 inviteId가 필요합니다.");
+  }
+  await requireMembership(uid, tenantId, ["owner"]);
+  const inviteRef = db.doc(`tenantInvites/${inviteId}`);
+  const invite = await inviteRef.get();
+  if (!invite.exists || invite.get("tenantId") !== tenantId) {
+    throw new HttpsError("not-found", "초대를 찾을 수 없습니다.");
+  }
+  await inviteRef.set({
+    status: "revoked",
+    revokedBy: uid,
+    revokedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { success: true };
+});
+
+export const getBotSnapshot = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const deviceId = String(request.data?.deviceId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !deviceId) {
+    throw new HttpsError("invalid-argument", "tenantId와 deviceId가 필요합니다.");
+  }
+  await requireActiveBotDevice(uid, tenantId, deviceId);
+
+  const [items, reservations, rooms, botSettings] = await Promise.all([
+    db.collection(`tenants/${tenantId}/items`).get(),
+    db.collection(`tenants/${tenantId}/currentReservations`).get(),
+    db.collection(`tenants/${tenantId}/rooms`).get(),
+    db.doc(`tenants/${tenantId}/settings/bot`).get(),
+  ]);
+  return {
+    items: items.docs.map((doc) => ({
+      itemId: doc.id,
+      name: String(doc.get("name") ?? ""),
+      maxCapacity: Number(doc.get("maxCapacity") ?? 0),
+      template: String(doc.get("template") ?? ""),
+    })),
+    reservations: reservations.docs.map((doc) => ({
+      reservationId: doc.id,
+      itemId: String(doc.get("itemId") ?? ""),
+      nickname: String(doc.get("nickname") ?? ""),
+      roomName: String(doc.get("roomName") ?? ""),
+      createdAt: doc.get("createdAt")?.toDate?.()?.toISOString?.() ?? "",
+    })),
+    rooms: rooms.docs.map((doc) => ({
+      name: String(doc.get("name") ?? ""),
+      type: String(doc.get("type") ?? "general"),
+    })),
+    settings: botSettings.exists ? botSettings.data() : {},
+  };
+});
+
+export const updateBotSettings = onCall(callableOptions, async (request) => {
+  const uid = request.auth?.uid;
+  const tenantId = String(request.data?.tenantId ?? "");
+  const deviceId = String(request.data?.deviceId ?? "");
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (!tenantId || !deviceId) {
+    throw new HttpsError("invalid-argument", "tenantId와 deviceId가 필요합니다.");
+  }
+  await requireActiveBotDevice(uid, tenantId, deviceId);
+
+  const commands = request.data?.commands ?? {};
+  const settings: Record<string, unknown> = {
+    commands: {
+      reserve: String(commands.reserve ?? "예약").slice(0, 50),
+      cancel: String(commands.cancel ?? "예약취소").slice(0, 50),
+      status: String(commands.status ?? "조회").slice(0, 50),
+      reset: String(commands.reset ?? "초기화").slice(0, 50),
+      max: String(commands.max ?? "세팅최대").slice(0, 50),
+      template: String(commands.template ?? "텍스트변경").slice(0, 50),
+      total: String(commands.total ?? "전체조회").slice(0, 50),
+    },
+    totalTemplate: String(request.data?.totalTemplate ?? "").slice(0, 5000),
+    resetHour: Math.max(0, Math.min(23, Number(request.data?.resetHour ?? 0))),
+    resetMinute: Math.max(0, Math.min(59, Number(request.data?.resetMinute ?? 0))),
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  };
+  await db.doc(`tenants/${tenantId}/settings/bot`).set(settings, { merge: true });
+
+  const rooms = Array.isArray(request.data?.rooms) ? request.data.rooms : [];
+  const existingRooms = await db.collection(`tenants/${tenantId}/rooms`).get();
+  const desiredRoomIds = new Set<string>();
+  const writer = db.bulkWriter();
+  for (const room of rooms.slice(0, 500)) {
+    const name = String(room?.name ?? "").trim();
+    const type = String(room?.type ?? "general");
+    if (!name || name.length > 200 || !["reservation", "admin", "general"].includes(type)) {
+      continue;
+    }
+    const roomId = Buffer.from(name, "utf8").toString("base64url").slice(0, 500);
+    desiredRoomIds.add(roomId);
+    writer.set(db.doc(`tenants/${tenantId}/rooms/${roomId}`), {
+      name,
+      type,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    }, { merge: true });
+  }
+  for (const room of existingRooms.docs) {
+    if (!desiredRoomIds.has(room.id)) writer.delete(room.ref);
+  }
+  await writer.close();
+  return { success: true };
+});
+
+export const createReservationEvent = onCall(callableOptions, async (request) => {
   const uid = request.auth?.uid;
   const tenantId = String(request.data?.tenantId ?? "");
   const eventId = String(request.data?.eventId ?? "");
@@ -356,10 +630,29 @@ export const createReservationEvent = onCall({ region }, async (request) => {
   const type = String(request.data?.type ?? "created");
   const itemId = String(request.data?.itemId ?? "");
   const businessDate = String(request.data?.businessDate ?? "");
+  const allowedTypes = ["created", "updated", "cancelled", "reset"];
 
   if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   if (!tenantId || !eventId || !reservationId) {
     throw new HttpsError("invalid-argument", "필수 예약 식별자가 없습니다.");
+  }
+  if (!allowedTypes.includes(type)) {
+    throw new HttpsError("invalid-argument", "지원하지 않는 예약 이벤트입니다.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate) || !itemId) {
+    throw new HttpsError("invalid-argument", "유효한 항목과 영업일이 필요합니다.");
+  }
+  for (const value of [
+    eventId,
+    reservationId,
+    itemId,
+    request.data?.itemName,
+    request.data?.nickname,
+    request.data?.roomName,
+  ]) {
+    if (String(value ?? "").length > 200) {
+      throw new HttpsError("invalid-argument", "예약 입력값이 너무 깁니다.");
+    }
   }
   const member = await requireMembership(
     uid,
@@ -391,34 +684,89 @@ export const createReservationEvent = onCall({ region }, async (request) => {
     `tenants/${tenantId}/currentReservations/${reservationId}`,
   );
   await db.runTransaction(async (transaction) => {
-    if ((await transaction.get(eventRef)).exists) return;
+    const eventSnapshot = await transaction.get(eventRef);
+    if (eventSnapshot.exists) return;
+    const reservationSnapshot = await transaction.get(reservationRef);
+
+    if (type === "created" || type === "updated") {
+      if (reservationSnapshot.exists) {
+        if (type === "created") return;
+      } else if (type === "updated") {
+        throw new HttpsError("not-found", "수정할 예약이 존재하지 않습니다.");
+      }
+      const nickname = String(request.data?.nickname ?? "").trim();
+      if (!nickname) {
+        throw new HttpsError("invalid-argument", "예약자 이름이 필요합니다.");
+      }
+      const item = await transaction.get(db.doc(`tenants/${tenantId}/items/${itemId}`));
+      if (!item.exists) {
+        throw new HttpsError("not-found", "예약 항목이 존재하지 않습니다.");
+      }
+      const currentReservations = await transaction.get(
+        db.collection(`tenants/${tenantId}/currentReservations`)
+          .where("itemId", "==", itemId)
+          .where("businessDate", "==", businessDate),
+      );
+      const movingToAnotherItem = type === "updated"
+        && reservationSnapshot.get("itemId") !== itemId;
+      if (
+        currentReservations.size >= Number(item.get("maxCapacity") ?? 0)
+        && (type === "created" || movingToAnotherItem)
+      ) {
+        throw new HttpsError("resource-exhausted", "예약 정원이 가득 찼습니다.");
+      }
+      if (currentReservations.docs.some(
+        (doc) => doc.id !== reservationId && doc.get("nickname") === nickname,
+      )) {
+        throw new HttpsError("already-exists", "이미 예약된 이름입니다.");
+      }
+    } else if (type === "cancelled" && !reservationSnapshot.exists) {
+      throw new HttpsError("not-found", "취소할 예약이 존재하지 않습니다.");
+    }
+
+    const effectiveItemId = type === "cancelled"
+      ? String(reservationSnapshot.get("itemId") ?? "")
+      : itemId;
+    const effectiveItemName = type === "cancelled"
+      ? String(reservationSnapshot.get("itemName") ?? "")
+      : String(request.data?.itemName ?? "").trim();
+    const effectiveNickname = type === "cancelled"
+      ? String(reservationSnapshot.get("nickname") ?? "")
+      : String(request.data?.nickname ?? "").trim();
+    const effectiveRoomName = type === "cancelled"
+      ? String(reservationSnapshot.get("roomName") ?? "")
+      : String(request.data?.roomName ?? "").trim();
+    const effectiveBusinessDate = type === "cancelled"
+      ? String(reservationSnapshot.get("businessDate") ?? "")
+      : businessDate;
+
     transaction.create(eventRef, {
       eventId,
       reservationId,
       type,
-      itemId,
-      itemName: String(request.data?.itemName ?? ""),
-      nickname: String(request.data?.nickname ?? ""),
-      roomName: String(request.data?.roomName ?? ""),
-      businessDate,
+      itemId: effectiveItemId,
+      itemName: effectiveItemName,
+      nickname: effectiveNickname,
+      roomName: effectiveRoomName,
+      businessDate: effectiveBusinessDate,
       sourceDeviceId,
       createdBy: uid,
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    if (type === "created") {
+    if (type === "created" || type === "updated") {
       transaction.set(reservationRef, {
         reservationId,
         itemId,
-        itemName: String(request.data?.itemName ?? ""),
-        nickname: String(request.data?.nickname ?? ""),
-        roomName: String(request.data?.roomName ?? ""),
+        itemName: String(request.data?.itemName ?? "").trim(),
+        nickname: String(request.data?.nickname ?? "").trim(),
+        roomName: String(request.data?.roomName ?? "").trim(),
         businessDate,
         sourceDeviceId,
         createdBy: uid,
-        createdAt: FieldValue.serverTimestamp(),
+        ...(type === "created" ? { createdAt: FieldValue.serverTimestamp() } : {}),
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      }, { merge: type === "updated" });
     } else if (type === "cancelled") {
       transaction.delete(reservationRef);
     }
@@ -432,6 +780,12 @@ export const createReservationEvent = onCall({ region }, async (request) => {
     const writer = db.bulkWriter();
     reservations.docs.forEach((doc) => writer.delete(doc.ref));
     await writer.close();
+    if (reservations.size > 0) {
+      await db.doc(`tenants/${tenantId}/dailyStats/${businessDate}`).set({
+        activeDelta: FieldValue.increment(-reservations.size),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
   }
   return { success: true };
 });
@@ -508,6 +862,8 @@ export const aggregateDailyReservationStats = onDocumentCreated(
     if (data.type === "created") {
       updates.createdCount = FieldValue.increment(1);
       updates.activeDelta = FieldValue.increment(1);
+    } else if (data.type === "updated") {
+      updates.updatedCount = FieldValue.increment(1);
     } else if (data.type === "cancelled") {
       updates.cancelledCount = FieldValue.increment(1);
       updates.activeDelta = FieldValue.increment(-1);

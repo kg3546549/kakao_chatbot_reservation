@@ -180,10 +180,16 @@ class TenantSelectionScreen extends StatelessWidget {
               padding: EdgeInsets.symmetric(vertical: 30),
               child: Text('소속된 가게가 없습니다. 첫 가게를 생성하세요.'),
             ),
-          FilledButton.icon(
-            onPressed: session.busy ? null : () => _createTenant(context),
-            icon: const Icon(Icons.add_business),
-            label: const Text('새 가게 만들기'),
+          if (session.platformAdmin)
+            FilledButton.icon(
+              onPressed: session.busy ? null : () => _createTenant(context),
+              icon: const Icon(Icons.add_business),
+              label: const Text('새 가게 만들기'),
+            ),
+          OutlinedButton.icon(
+            onPressed: session.busy ? null : () => _acceptInvite(context),
+            icon: const Icon(Icons.key_outlined),
+            label: const Text('초대 코드로 가게 참여'),
           ),
           if (!session.platformAdmin)
             TextButton.icon(
@@ -228,6 +234,35 @@ class TenantSelectionScreen extends StatelessWidget {
     controller.dispose();
     if (name != null && name.trim().isNotEmpty && context.mounted) {
       await context.read<SessionProvider>().createTenant(name);
+    }
+  }
+
+  Future<void> _acceptInvite(BuildContext context) async {
+    final controller = TextEditingController();
+    final inviteId = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('가게 초대 수락'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '초대 코드'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('참여'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (inviteId != null && inviteId.trim().isNotEmpty && context.mounted) {
+      await context.read<SessionProvider>().acceptTenantInvite(inviteId);
     }
   }
 }

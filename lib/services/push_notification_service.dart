@@ -11,11 +11,22 @@ class PushNotificationService {
 
   PushNotificationService._();
 
+  void Function(Map<String, dynamic> data)? onNotificationTap;
+
   Future<void> initialize() async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
-    await _notifications.initialize(settings: settings);
+    await _notifications.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload == null || payload.isEmpty) return;
+        onNotificationTap?.call(
+          Map<String, dynamic>.from(jsonDecode(payload) as Map),
+        );
+      },
+    );
 
     const channel = AndroidNotificationChannel(
       'reservation_updates',
@@ -29,6 +40,13 @@ class PushNotificationService {
         ?.createNotificationChannel(channel);
 
     FirebaseMessaging.onMessage.listen(_showForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => onNotificationTap?.call(message.data),
+    );
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      onNotificationTap?.call(initialMessage.data);
+    }
   }
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {

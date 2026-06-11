@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
+import 'tenant_invites_screen.dart';
 
 class TenantMembersScreen extends StatelessWidget {
   const TenantMembersScreen({super.key});
@@ -19,7 +20,19 @@ class TenantMembersScreen extends StatelessWidget {
         .snapshots();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('멤버 관리')),
+      appBar: AppBar(
+        title: const Text('멤버 관리'),
+        actions: [
+          IconButton(
+            tooltip: '대기 중인 초대',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TenantInvitesScreen()),
+            ),
+            icon: const Icon(Icons.key_outlined),
+          ),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: members,
         builder: (context, snapshot) {
@@ -83,7 +96,10 @@ class TenantMembersScreen extends StatelessWidget {
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: '가입된 이메일'),
+                decoration: const InputDecoration(
+                  labelText: '초대 대상 계정 이메일',
+                  helperText: '이메일은 발송하지 않으며, 생성된 코드를 직접 전달합니다.',
+                ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -112,7 +128,29 @@ class TenantMembersScreen extends StatelessWidget {
       ),
     );
     if (result == true && emailController.text.trim().isNotEmpty) {
-      await session.addTenantMember(email: emailController.text, role: role);
+      final inviteId = await session.createTenantInvite(
+        email: emailController.text,
+        role: role,
+      );
+      if (inviteId != null && context.mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('초대 코드 생성 완료'),
+            content: SelectableText(
+              '$inviteId\n\n초대받은 사용자가 동일한 이메일로 로그인한 뒤 '
+              '가게 선택 화면에서 이 코드를 입력해야 합니다. '
+              '이 코드를 직접 전달하세요. 코드는 7일간 유효합니다.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
+          ),
+        );
+      }
     }
     emailController.dispose();
   }

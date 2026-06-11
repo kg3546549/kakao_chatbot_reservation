@@ -4,6 +4,7 @@ import '../../providers/bot_provider.dart';
 import '../../models/room.dart';
 import 'log_viewer_screen.dart';
 import 'command_settings_screen.dart';
+import 'sync_queue_screen.dart';
 
 class SettingsTab extends StatelessWidget {
   const SettingsTab({super.key});
@@ -82,6 +83,15 @@ class SettingsTab extends StatelessWidget {
                 subtitle: '봇 작동 기록 및 오류 진단',
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const LogViewerScreen())),
+              ),
+              _buildSystemCard(
+                icon: Icons.sync_problem_outlined,
+                title: '서버 동기화 상태',
+                subtitle: '대기·실패 이벤트 확인 및 수동 재시도',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SyncQueueScreen()),
+                ),
               ),
               _buildSystemCard(
                 icon: Icons.battery_saver_outlined,

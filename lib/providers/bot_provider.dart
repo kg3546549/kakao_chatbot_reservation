@@ -18,6 +18,7 @@ class BotProvider with ChangeNotifier {
   final MethodChannel _channel =
       const MethodChannel('com.geon.kakao_bot/notification');
   Timer? _cutoffTimer;
+  StreamSubscription<String>? _tenantSubscription;
   DateTime? _lastBusinessDate;
 
   List<Item> _items = [];
@@ -51,6 +52,7 @@ class BotProvider with ChangeNotifier {
 
   BotProvider() {
     _channel.setMethodCallHandler(_handleMethodCall);
+    _tenantSubscription = _db.tenantChanges.listen((_) => _init());
     _startCutoffWatcher();
     _init();
   }
@@ -180,6 +182,7 @@ class BotProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('total_template', template);
     totalTemplate = template;
+    await CloudSyncService.instance.publishBotSettings();
     notifyListeners();
   }
 
@@ -233,6 +236,7 @@ class BotProvider with ChangeNotifier {
     cmdMax = max;
     cmdTemplate = template;
     cmdTotal = total;
+    await CloudSyncService.instance.publishBotSettings();
     notifyListeners();
   }
 
@@ -295,20 +299,33 @@ class BotProvider with ChangeNotifier {
       final nicknames = rawNicks
           .split(RegExp(r'[,|]'))
           .map((s) => s.trim())
-          .where((s) => s.isNotEmpty);
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final currentReservations =
+          await _db.getReservations(itemId: item.id!, date: _today());
+      final reservedNames = currentReservations
+          .map((reservation) => reservation.nickname)
+          .toSet();
       final newReservations = <Reservation>[];
       for (var nick in nicknames) {
+        if (reservedNames.contains(nick) ||
+            currentReservations.length + newReservations.length >=
+                item.maxCapacity) {
+          continue;
+        }
         final reservation =
             Reservation(itemId: item.id!, nickname: nick, roomName: roomName);
         final reservationId = await _db.insertReservation(reservation);
         final savedReservation = Reservation(
           id: reservationId,
+          cloudId: reservation.cloudId,
           itemId: reservation.itemId,
           nickname: reservation.nickname,
           roomName: reservation.roomName,
           createdAt: reservation.createdAt,
         );
         newReservations.add(savedReservation);
+        reservedNames.add(nick);
         await CloudSyncService.instance.publishReservationCreated(
           reservation: savedReservation,
           item: item,
@@ -369,6 +386,7 @@ class BotProvider with ChangeNotifier {
             template: item.template);
         await _db.updateItem(updatedItem);
         _upsertItemInCache(updatedItem);
+        await CloudSyncService.instance.publishItem(updatedItem);
         await _sendReply(roomName, "✅ ${item.name} 최대 인원이 $max명으로 변경되었습니다.");
         await _sendReply(
             roomName, await _formatStatus(updatedItem, date: _today()));
@@ -394,6 +412,7 @@ class BotProvider with ChangeNotifier {
           template: newTemplate);
       await _db.updateItem(updatedItem);
       _upsertItemInCache(updatedItem);
+      await CloudSyncService.instance.publishItem(updatedItem);
 
       await _sendReply(roomName, "✅ ${item.name} 항목의 공지 텍스트가 변경되었습니다.");
       notifyListeners();
@@ -407,6 +426,7 @@ class BotProvider with ChangeNotifier {
     resetHour = time.hour;
     resetMinute = time.minute;
     _lastBusinessDate = businessDate;
+    await CloudSyncService.instance.publishBotSettings();
     notifyListeners();
   }
 
@@ -472,6 +492,7 @@ class BotProvider with ChangeNotifier {
       for (final currentRoom in _rooms)
         if (currentRoom.id == room.id) updated else currentRoom,
     ]);
+    await CloudSyncService.instance.publishBotSettings();
     notifyListeners();
   }
 
@@ -520,6 +541,7 @@ class BotProvider with ChangeNotifier {
   @override
   void dispose() {
     _cutoffTimer?.cancel();
+    _tenantSubscription?.cancel();
     super.dispose();
   }
 }

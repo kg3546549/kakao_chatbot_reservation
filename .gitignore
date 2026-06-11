@@ -46,3 +46,20 @@ firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log
 .firebase/
+/android/app/google-services.json
+/android/key.properties
+*.jks
+*.keystore
+/functions/.env*
+
+# Node.js dependencies
+node_modules/
+**/node_modules/
+
+# PowerPoint Temporary Files
+~$*
+~$*.pptx
+presentation/presentation_v*.pptx
+
+
+

@@ -17,6 +17,13 @@ class AdminAnalyticsScreen extends StatelessWidget {
         .orderBy('businessDate', descending: true)
         .limit(30)
         .snapshots();
+    final recentEvents = FirebaseFirestore.instance
+        .collection('tenants')
+        .doc(tenant.tenantId)
+        .collection('reservationEvents')
+        .orderBy('createdAt', descending: true)
+        .limit(500)
+        .snapshots();
 
     return Scaffold(
       appBar: AppBar(title: const Text('예약 분석')),
@@ -89,6 +96,8 @@ class AdminAnalyticsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+              const SizedBox(height: 24),
+              _DetailedAnalytics(events: recentEvents),
             ],
           );
         },
@@ -97,6 +106,79 @@ class AdminAnalyticsScreen extends StatelessWidget {
   }
 
   static int _int(dynamic value) => value is num ? value.toInt() : 0;
+}
+
+class _DetailedAnalytics extends StatelessWidget {
+  final Stream<QuerySnapshot<Map<String, dynamic>>> events;
+
+  const _DetailedAnalytics({required this.events});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: events,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Text('상세 분석을 불러오지 못했습니다.\n${snapshot.error}');
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final itemCounts = <String, int>{};
+        final hourlyCounts = <int, int>{};
+        for (final event in snapshot.data!.docs) {
+          final data = event.data();
+          if (data['type'] != 'created') continue;
+          final itemName =
+              (data['itemName'] ?? data['itemId'] ?? '항목 없음').toString();
+          itemCounts[itemName] = (itemCounts[itemName] ?? 0) + 1;
+          final timestamp = data['createdAt'];
+          if (timestamp is Timestamp) {
+            final hour = timestamp.toDate().hour;
+            hourlyCounts[hour] = (hourlyCounts[hour] ?? 0) + 1;
+          }
+        }
+        final sortedItems = itemCounts.entries.toList()
+          ..sort((left, right) => right.value.compareTo(left.value));
+        final sortedHours = hourlyCounts.entries.toList()
+          ..sort((left, right) => left.key.compareTo(right.key));
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '항목별 예약',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            if (sortedItems.isEmpty) const Text('분석할 예약 이벤트가 없습니다.'),
+            for (final item in sortedItems.take(10))
+              Card(
+                child: ListTile(
+                  title: Text(item.key),
+                  trailing: Text('${item.value}건'),
+                ),
+              ),
+            const SizedBox(height: 20),
+            const Text(
+              '시간대별 예약 발생',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            if (sortedHours.isEmpty) const Text('분석할 예약 이벤트가 없습니다.'),
+            for (final hour in sortedHours)
+              Card(
+                child: ListTile(
+                  title: Text('${hour.key.toString().padLeft(2, '0')}:00'),
+                  trailing: Text('${hour.value}건'),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
