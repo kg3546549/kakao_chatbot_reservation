@@ -88,7 +88,6 @@ async function requireActiveBotDevice(
 }
 
 export const createTenant = onCall(callableOptions, async (request) => {
-  requirePlatformAdmin(request);
   const uid = request.auth?.uid;
   const name = String(request.data?.name ?? "").trim();
   if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");

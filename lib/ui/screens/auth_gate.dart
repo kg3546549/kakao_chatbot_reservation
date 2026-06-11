@@ -180,12 +180,11 @@ class TenantSelectionScreen extends StatelessWidget {
               padding: EdgeInsets.symmetric(vertical: 30),
               child: Text('소속된 가게가 없습니다. 첫 가게를 생성하세요.'),
             ),
-          if (session.platformAdmin)
-            FilledButton.icon(
-              onPressed: session.busy ? null : () => _createTenant(context),
-              icon: const Icon(Icons.add_business),
-              label: const Text('새 가게 만들기'),
-            ),
+          FilledButton.icon(
+            onPressed: session.busy ? null : () => _createTenant(context),
+            icon: const Icon(Icons.add_business),
+            label: const Text('새 가게 만들기'),
+          ),
           OutlinedButton.icon(
             onPressed: session.busy ? null : () => _acceptInvite(context),
             icon: const Icon(Icons.key_outlined),
@@ -209,29 +208,10 @@ class TenantSelectionScreen extends StatelessWidget {
   }
 
   Future<void> _createTenant(BuildContext context) async {
-    final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('새 가게'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '가게 이름'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('생성'),
-          ),
-        ],
-      ),
+      builder: (context) => const CreateTenantDialog(),
     );
-    controller.dispose();
     if (name != null && name.trim().isNotEmpty && context.mounted) {
       Future.microtask(() async {
         if (context.mounted) {
@@ -242,29 +222,10 @@ class TenantSelectionScreen extends StatelessWidget {
   }
 
   Future<void> _acceptInvite(BuildContext context) async {
-    final controller = TextEditingController();
     final inviteId = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('가게 초대 수락'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '초대 코드'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('참여'),
-          ),
-        ],
-      ),
+      builder: (context) => const AcceptInviteDialog(),
     );
-    controller.dispose();
     if (inviteId != null && inviteId.trim().isNotEmpty && context.mounted) {
       Future.microtask(() async {
         if (context.mounted) {
@@ -359,3 +320,94 @@ class _ModeCard extends StatelessWidget {
     );
   }
 }
+
+class CreateTenantDialog extends StatefulWidget {
+  const CreateTenantDialog({super.key});
+
+  @override
+  State<CreateTenantDialog> createState() => _CreateTenantDialogState();
+}
+
+class _CreateTenantDialogState extends State<CreateTenantDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('새 가게'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: '가게 이름'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('생성'),
+        ),
+      ],
+    );
+  }
+}
+
+class AcceptInviteDialog extends StatefulWidget {
+  const AcceptInviteDialog({super.key});
+
+  @override
+  State<AcceptInviteDialog> createState() => _AcceptInviteDialogState();
+}
+
+class _AcceptInviteDialogState extends State<AcceptInviteDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('가게 초대 수락'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: '초대 코드'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('참여'),
+        ),
+      ],
+    );
+  }
+}
+
