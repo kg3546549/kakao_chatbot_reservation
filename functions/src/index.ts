@@ -12,7 +12,7 @@ initializeApp();
 const db = getFirestore();
 const region = "asia-northeast3";
 const bootstrapAdminEmail = defineString("BOOTSTRAP_ADMIN_EMAIL");
-const callableOptions = { region, enforceAppCheck: true };
+const callableOptions = { region, enforceAppCheck: false };
 
 type Role = "owner" | "manager" | "viewer" | "botDevice";
 
